@@ -8,11 +8,11 @@ class ToolsTests(unittest.TestCase):
         self.assertEqual(create_tools(None), [])
         self.assertEqual(create_tools("   "), [])
 
-    def test_tavily_key_registers_search_and_research(self) -> None:
+    def test_tavily_key_registers_search_extract_and_research(self) -> None:
         tools = create_tools("test-key")
         self.assertEqual(
             [registered.name for registered in tools],
-            ["web_search", "deep_research"],
+            ["web_search", "web_extract", "deep_research"],
         )
 
 

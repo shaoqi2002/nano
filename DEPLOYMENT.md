@@ -29,6 +29,12 @@ characters. Override `DEEP_RESEARCH_TIMEOUT_SECONDS`,
 `DEEP_RESEARCH_POLL_INTERVAL_SECONDS`, or
 `DEEP_RESEARCH_MAX_CONTENT_LENGTH` in `.env.production` when needed.
 
+Focused source verification uses Tavily Extract after search. By default it
+accepts up to 5 URLs, returns at most 20,000 characters across the selected
+sources, and allows 45 seconds per extraction request. These limits can be
+changed with `WEB_EXTRACT_MAX_URLS`, `WEB_EXTRACT_MAX_CONTENT_LENGTH`, and
+`WEB_EXTRACT_TIMEOUT_SECONDS`.
+
 ## Verification
 
 ```sh
