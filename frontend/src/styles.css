@@ -591,6 +591,14 @@ button {
   border-color: #888;
 }
 
+.api-key-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  color: #bbb;
+  font-size: 13px;
+}
+
 .dialog-close,
 .danger-button,
 .primary-button {

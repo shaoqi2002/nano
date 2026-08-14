@@ -12,6 +12,7 @@ import {
 
 const ACTIVE_KEY = "nano-agent-active-conversation";
 const API_KEY_STORAGE_KEY = "nano-deepseek-api-key";
+const TAVILY_API_KEY_STORAGE_KEY = "nano-tavily-api-key";
 
 const conversations = ref([]);
 const activeConversationId = ref(localStorage.getItem(ACTIVE_KEY));
@@ -25,6 +26,8 @@ const messageList = ref(null);
 const composer = ref(null);
 const apiKey = ref(localStorage.getItem(API_KEY_STORAGE_KEY) || "");
 const apiKeyDraft = ref("");
+const tavilyApiKey = ref(localStorage.getItem(TAVILY_API_KEY_STORAGE_KEY) || "");
+const tavilyApiKeyDraft = ref("");
 const apiKeyDialogOpen = ref(false);
 const deletingConversationId = ref(null);
 
@@ -43,6 +46,7 @@ function rememberActiveConversation(id) {
 
 function openApiKeyDialog() {
   apiKeyDraft.value = apiKey.value;
+  tavilyApiKeyDraft.value = tavilyApiKey.value;
   apiKeyDialogOpen.value = true;
   sidebarOpen.value = false;
 }
@@ -53,6 +57,12 @@ function saveApiKey() {
 
   apiKey.value = value;
   localStorage.setItem(API_KEY_STORAGE_KEY, value);
+  tavilyApiKey.value = tavilyApiKeyDraft.value.trim();
+  if (tavilyApiKey.value) {
+    localStorage.setItem(TAVILY_API_KEY_STORAGE_KEY, tavilyApiKey.value);
+  } else {
+    localStorage.removeItem(TAVILY_API_KEY_STORAGE_KEY);
+  }
   apiKeyDialogOpen.value = false;
   errorMessage.value = "";
 }
@@ -60,7 +70,10 @@ function saveApiKey() {
 function clearApiKey() {
   apiKey.value = "";
   apiKeyDraft.value = "";
+  tavilyApiKey.value = "";
+  tavilyApiKeyDraft.value = "";
   localStorage.removeItem(API_KEY_STORAGE_KEY);
+  localStorage.removeItem(TAVILY_API_KEY_STORAGE_KEY);
   apiKeyDialogOpen.value = false;
 }
 
@@ -197,7 +210,12 @@ async function submitMessage() {
   await scrollToBottom();
 
   try {
-    await sendMessage(conversationId, content, apiKey.value);
+    await sendMessage(
+      conversationId,
+      content,
+      apiKey.value,
+      tavilyApiKey.value,
+    );
     const history = await getMessages(conversationId);
     messages.value = history.messages;
     await scrollToBottom();
@@ -316,7 +334,7 @@ onMounted(async () => {
 
       <button class="sidebar__footer" @click="openApiKeyDialog">
         <span class="status-dot" :class="{ 'status-dot--configured': apiKey }" />
-        <span>{{ apiKey ? "API Key 已配置" : "设置 API Key" }}</span>
+        <span>{{ apiKey && tavilyApiKey ? "API Keys 已配置" : apiKey ? "DeepSeek 已配置" : "设置 API Key" }}</span>
       </button>
     </aside>
 
@@ -409,24 +427,37 @@ onMounted(async () => {
       <form class="api-key-dialog" @submit.prevent="saveApiKey">
         <div class="api-key-dialog__header">
           <div>
-            <h2>DeepSeek API Key</h2>
-            <p>密钥保存在当前浏览器中，下次打开 Nano 时无需重新输入。</p>
+            <h2>API Keys</h2>
+            <p>密钥只保存在当前浏览器中，并随消息请求发送到 Nano 后端。</p>
           </div>
           <button type="button" class="dialog-close" aria-label="关闭" @click="apiKeyDialogOpen = false">
             ×
           </button>
         </div>
-        <input
-          v-model="apiKeyDraft"
-          type="password"
-          autocomplete="off"
-          placeholder="sk-..."
-          aria-label="DeepSeek API Key"
-          autofocus
-        />
+        <label class="api-key-field">
+          <span>DeepSeek API Key</span>
+          <input
+            v-model="apiKeyDraft"
+            type="password"
+            autocomplete="off"
+            placeholder="sk-..."
+            aria-label="DeepSeek API Key"
+            autofocus
+          />
+        </label>
+        <label class="api-key-field">
+          <span>Tavily API Key（可选）</span>
+          <input
+            v-model="tavilyApiKeyDraft"
+            type="password"
+            autocomplete="off"
+            placeholder="tvly-..."
+            aria-label="Tavily API Key"
+          />
+        </label>
         <div class="api-key-dialog__actions">
           <button v-if="apiKey" type="button" class="danger-button" @click="clearApiKey">
-            清除密钥
+            清除全部
           </button>
           <span v-else />
           <button type="submit" class="primary-button" :disabled="!apiKeyDraft.trim()">

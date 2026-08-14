@@ -64,6 +64,10 @@ async def create_message(
         str,
         Header(alias="X-DeepSeek-API-Key", min_length=1),
     ],
+    tavily_api_key: Annotated[
+        str | None,
+        Header(alias="X-Tavily-API-Key", min_length=1),
+    ] = None,
 ) -> SendMessageResponse:
     try:
         assistant_message = await send_message(
@@ -71,6 +75,7 @@ async def create_message(
             conversation_id=conversation_id,
             content=request.message,
             api_key=api_key,
+            tavily_api_key=tavily_api_key,
         )
     except ConversationNotFoundError as error:
         raise HTTPException(

@@ -19,6 +19,16 @@ The backend and Watchtower use public DNS servers explicitly because Tailscale
 may replace the host resolver with `100.100.100.100`, which Docker's embedded
 resolver cannot always reach from a bridge network.
 
+## Web research settings
+
+Requests that include a Tavily API key can use both quick web search and Tavily
+Research. Deep research runs as an asynchronous Tavily task that is polled by
+the backend. The production defaults allow 180 seconds for completion, poll
+every 2 seconds, and cap the report passed back to the chat model at 30,000
+characters. Override `DEEP_RESEARCH_TIMEOUT_SECONDS`,
+`DEEP_RESEARCH_POLL_INTERVAL_SECONDS`, or
+`DEEP_RESEARCH_MAX_CONTENT_LENGTH` in `.env.production` when needed.
+
 ## Verification
 
 ```sh

@@ -30,12 +30,17 @@ export function getMessages(conversationId) {
   return request(`/conversations/${conversationId}/messages`);
 }
 
-export function sendMessage(conversationId, message, apiKey) {
+export function sendMessage(conversationId, message, apiKey, tavilyApiKey) {
+  const headers = {
+    "X-DeepSeek-API-Key": apiKey,
+  };
+  if (tavilyApiKey) {
+    headers["X-Tavily-API-Key"] = tavilyApiKey;
+  }
+
   return request(`/conversations/${conversationId}/messages`, {
     method: "POST",
-    headers: {
-      "X-DeepSeek-API-Key": apiKey,
-    },
+    headers,
     body: JSON.stringify({ message }),
   });
 }
