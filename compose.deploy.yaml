@@ -1,0 +1,54 @@
+name: nano
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agent
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env.production 中设置 POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    image: ghcr.io/shaoqi2002/nano-backend:latest
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agent:${POSTGRES_PASSWORD}@postgres:5432/agent
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      CHAT_CONTEXT_MESSAGE_LIMIT: ${CHAT_CONTEXT_MESSAGE_LIMIT:-50}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    image: ghcr.io/shaoqi2002/nano-frontend:latest
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8088}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
