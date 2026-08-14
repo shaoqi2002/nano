@@ -22,6 +22,11 @@ services:
     image: ghcr.io/shaoqi2002/nano-backend:latest
     pull_policy: always
     restart: unless-stopped
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     environment:
       DATABASE_URL: postgresql+asyncpg://agent:${POSTGRES_PASSWORD}@postgres:5432/agent
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
@@ -44,11 +49,28 @@ services:
     image: ghcr.io/shaoqi2002/nano-frontend:latest
     pull_policy: always
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     ports:
       - "${APP_PORT:-8088}:80"
     depends_on:
       backend:
         condition: service_healthy
+
+  watchtower:
+    image: nickfedor/watchtower:arm64v8-1.20.2
+    pull_policy: always
+    restart: unless-stopped
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_ROLLING_RESTART: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   postgres_data:
