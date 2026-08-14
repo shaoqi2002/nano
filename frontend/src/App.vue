@@ -8,6 +8,7 @@ import {
   listConversations,
   sendMessage,
 } from "./api";
+import { renderMarkdown } from "./markdown";
 
 
 const ACTIVE_KEY = "nano-agent-active-conversation";
@@ -369,7 +370,12 @@ onMounted(async () => {
           >
             <div v-if="message.role === 'assistant'" class="assistant-avatar">N</div>
             <div class="message__body">
-              <div class="message__content">{{ message.content }}</div>
+              <div
+                v-if="message.role === 'assistant'"
+                class="message__content markdown-body"
+                v-html="renderMarkdown(message.content)"
+              />
+              <div v-else class="message__content">{{ message.content }}</div>
               <div class="message__meta">
                 <span>{{ formatDate(message.created_at) }}</span>
                 <button
