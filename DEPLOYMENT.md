@@ -17,7 +17,9 @@ docker compose --env-file .env.production -f compose.yaml up -d
 
 The backend and Watchtower use public DNS servers explicitly because Tailscale
 may replace the host resolver with `100.100.100.100`, which Docker's embedded
-resolver cannot always reach from a bridge network.
+resolver cannot always reach from a bridge network. The backend also pins the
+currently advertised `api.deepseek.com` edge addresses in `extra_hosts` so API
+calls continue to work when Docker DNS is unavailable.
 
 ## Verification
 
