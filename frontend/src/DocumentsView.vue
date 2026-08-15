@@ -387,6 +387,7 @@ onUnmounted(() => window.clearInterval(pollingTimer));
   min-height: 0;
   padding: 14px 10px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   border-right: 1px solid #353535;
   background: #1b1b1b;
 }
@@ -572,6 +573,7 @@ onUnmounted(() => window.clearInterval(pollingTimer));
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   background: #292929;
 }
 

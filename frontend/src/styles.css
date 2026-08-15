@@ -1,6 +1,10 @@
 :root {
   color: #ececec;
   background: #212121;
+  color-scheme: dark;
+  --scrollbar-thumb: #474747;
+  --scrollbar-thumb-hover: #5b5b5b;
+  --scrollbar-thumb-active: #6b6b6b;
   font-family:
     Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Microsoft YaHei", sans-serif;
@@ -10,6 +14,34 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 42px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-thumb-active);
 }
 
 html,
@@ -18,6 +50,10 @@ body,
   width: 100%;
   height: 100%;
   margin: 0;
+}
+
+body {
+  overflow: hidden;
 }
 
 button,
@@ -31,7 +67,8 @@ button {
 
 .app-shell {
   display: flex;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: #212121;
 }
@@ -263,6 +300,7 @@ button {
   height: 100vh;
   flex: 1;
   grid-template-rows: auto 1fr auto;
+  overflow: hidden;
 }
 
 .topbar {
@@ -295,6 +333,7 @@ button {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .welcome {
@@ -677,30 +716,48 @@ button {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 11px 11px 11px 18px;
-  border: 1px solid #4a4a4a;
-  border-radius: 25px;
-  background: #2f2f2f;
-  box-shadow: 0 8px 32px rgb(0 0 0 / 18%);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  padding: 10px 10px 10px 16px;
+  border: 1px solid #414141;
+  border-radius: 19px;
+  background: linear-gradient(180deg, #303030, #2b2b2b);
+  box-shadow:
+    0 10px 34px rgb(0 0 0 / 18%),
+    inset 0 1px 0 rgb(255 255 255 / 3%);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .composer-box:focus-within {
-  border-color: #626262;
-  box-shadow: 0 10px 38px rgb(0 0 0 / 24%);
+  border-color: #5b6965;
+  background: linear-gradient(180deg, #323232, #2c2c2c);
+  box-shadow:
+    0 12px 40px rgb(0 0 0 / 24%),
+    0 0 0 3px rgb(130 201 185 / 5%);
 }
 
 .composer-box textarea {
   width: 100%;
   max-height: 180px;
   min-height: 25px;
+  padding: 1px 5px 1px 0;
   resize: none;
   border: 0;
   outline: 0;
   background: transparent;
   color: #f0f0f0;
+  caret-color: #a9d8cd;
   font-size: 15px;
   line-height: 1.55;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.composer-box textarea::-webkit-scrollbar {
+  width: 7px;
+}
+
+.composer-box textarea::-webkit-scrollbar-thumb {
+  border-width: 2px;
+  background-color: #555;
 }
 
 .composer-box textarea::placeholder {
