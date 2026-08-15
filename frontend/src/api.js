@@ -46,6 +46,67 @@ export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRa
   });
 }
 
+export async function consumeEventStream(response, onEvent) {
+  if (!response.body) throw new Error("浏览器不支持流式响应");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  function dispatch(block) {
+    if (!block || block.startsWith(":")) return;
+    let event = "message";
+    const data = [];
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+    }
+    if (!data.length) return;
+    const payload = JSON.parse(data.join("\n"));
+    onEvent({ type: event, ...payload });
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    buffer = buffer.replaceAll("\r\n", "\n");
+    let boundary;
+    while ((boundary = buffer.indexOf("\n\n")) >= 0) {
+      dispatch(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
+    }
+    if (done) break;
+  }
+  dispatch(buffer.trim());
+}
+
+export async function sendMessageStream(
+  conversationId,
+  message,
+  apiKey,
+  tavilyApiKey,
+  useRag,
+  onEvent,
+  signal,
+) {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-DeepSeek-API-Key": apiKey,
+  };
+  if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
+
+  const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ message, use_rag: useRag }),
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || `请求失败（${response.status}）`);
+  }
+  await consumeEventStream(response, onEvent);
+}
+
 export function deleteConversation(conversationId) {
   return request(`/conversations/${conversationId}`, { method: "DELETE" });
 }

@@ -6,7 +6,7 @@ import {
   deleteConversation as deleteConversationRequest,
   getMessages,
   listConversations,
-  sendMessage,
+  sendMessageStream,
 } from "./api";
 import DocumentsView from "./DocumentsView.vue";
 import { renderMarkdown } from "./markdown";
@@ -36,6 +36,7 @@ const apiKeyDialogOpen = ref(false);
 const deletingConversationId = ref(null);
 const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
 const documentTarget = ref({ id: null, page: null });
+const streamController = ref(null);
 
 const activeConversation = computed(() =>
   conversations.value.find((item) => item.id === activeConversationId.value),
@@ -210,6 +211,55 @@ function updateConversationTitle(content) {
   conversation.title = content.length > 28 ? `${content.slice(0, 28)}…` : content;
 }
 
+function toolLabel(name) {
+  return {
+    document_search: "检索文档库",
+    web_search: "搜索网页",
+    web_extract: "读取网页",
+    deep_research: "深度研究",
+  }[name] || name;
+}
+
+function handleStreamEvent(message, event) {
+  if (event.type === "message.delta") {
+    message.content += event.delta || "";
+  } else if (event.type === "message.reset") {
+    message.content = "";
+  } else if (event.type === "sources.ready") {
+    message.sources = event.sources || [];
+  } else if (event.type === "tool.started") {
+    message.steps.push({
+      callId: event.call_id,
+      name: event.name,
+      label: toolLabel(event.name),
+      status: "running",
+    });
+  } else if (["tool.completed", "tool.failed"].includes(event.type)) {
+    const step = message.steps.find((item) => item.callId === event.call_id);
+    if (step) {
+      step.status = event.type === "tool.failed" ? "failed" : "completed";
+      step.durationMs = event.duration_ms;
+      step.resultCount = event.result_count;
+      step.message = event.message;
+    }
+  } else if (event.type === "message.completed") {
+    Object.assign(message, event.message, {
+      steps: message.steps,
+      status: "completed",
+    });
+  } else if (event.type === "message.failed") {
+    throw new Error(event.message || "生成回答失败");
+  }
+  nextTick(() => {
+    if (!messageList.value) return;
+    messageList.value.scrollTop = messageList.value.scrollHeight;
+  });
+}
+
+function stopGeneration() {
+  streamController.value?.abort();
+}
+
 async function submitMessage() {
   const content = draft.value.trim();
   if (!content || !canSend.value) return;
@@ -227,35 +277,50 @@ async function submitMessage() {
     content,
     created_at: new Date().toISOString(),
   };
+  const streamingMessage = {
+    id: `stream-${Date.now()}`,
+    role: "assistant",
+    content: "",
+    sources: [],
+    steps: [],
+    status: "streaming",
+    created_at: new Date().toISOString(),
+  };
 
-  messages.value.push(optimisticMessage);
+  messages.value.push(optimisticMessage, streamingMessage);
   updateConversationTitle(content);
   draft.value = "";
   errorMessage.value = "";
   isSending.value = true;
+  streamController.value = new AbortController();
   resizeComposer();
   await scrollToBottom();
 
   try {
-    await sendMessage(
+    await sendMessageStream(
       conversationId,
       content,
       apiKey.value,
       tavilyApiKey.value,
       useRag.value,
+      (event) => handleStreamEvent(streamingMessage, event),
+      streamController.value.signal,
     );
-    const history = await getMessages(conversationId);
-    messages.value = history.messages;
-    await scrollToBottom();
+    if (streamingMessage.status === "streaming") {
+      throw new Error("流式响应意外中断，请重试");
+    }
   } catch (error) {
-    errorMessage.value = error.message;
-    try {
-      const history = await getMessages(conversationId);
-      messages.value = history.messages;
-    } catch {
-      // Keep the optimistic message when the server cannot be reached.
+    if (error.name === "AbortError") {
+      streamingMessage.status = "stopped";
+      if (!streamingMessage.content) {
+        messages.value = messages.value.filter((item) => item !== streamingMessage);
+      }
+    } else {
+      streamingMessage.status = "failed";
+      errorMessage.value = error.message;
     }
   } finally {
+    streamController.value = null;
     isSending.value = false;
   }
 }
@@ -406,8 +471,35 @@ onMounted(async () => {
           >
             <div v-if="message.role === 'assistant'" class="assistant-avatar">N</div>
             <div class="message__body">
+              <div v-if="message.role === 'assistant' && message.steps?.length" class="agent-steps">
+                <div
+                  v-for="step in message.steps"
+                  :key="step.callId"
+                  class="agent-step"
+                  :class="`agent-step--${step.status}`"
+                >
+                  <span class="agent-step__status" />
+                  <span>{{ step.label }}</span>
+                  <span v-if="step.resultCount !== undefined" class="agent-step__detail">
+                    {{ step.resultCount }} 条结果
+                  </span>
+                  <span v-else-if="step.durationMs" class="agent-step__detail">
+                    {{ (step.durationMs / 1000).toFixed(1) }}s
+                  </span>
+                  <span v-if="step.message" class="agent-step__detail" :title="step.message">失败</span>
+                </div>
+              </div>
               <div
-                v-if="message.role === 'assistant'"
+                v-if="message.role === 'assistant' && !message.content && message.status === 'streaming'"
+                class="typing-indicator"
+                aria-label="正在生成回答"
+              >
+                <span />
+                <span />
+                <span />
+              </div>
+              <div
+                v-else-if="message.role === 'assistant'"
                 class="message__content markdown-body"
                 v-html="renderMarkdown(message.content)"
               />
@@ -424,8 +516,10 @@ onMounted(async () => {
               </div>
               <div class="message__meta">
                 <span>{{ formatDate(message.created_at) }}</span>
+                <span v-if="message.status === 'stopped'">已停止</span>
+                <span v-if="message.status === 'failed'">生成失败</span>
                 <button
-                  v-if="message.role === 'assistant'"
+                  v-if="message.role === 'assistant' && message.content"
                   class="copy-button"
                   aria-label="复制回答"
                   @click="copyMessage(message.content)"
@@ -436,14 +530,6 @@ onMounted(async () => {
             </div>
           </article>
 
-          <article v-if="isSending" class="message message--assistant">
-            <div class="assistant-avatar">N</div>
-            <div class="typing-indicator" aria-label="正在生成回答">
-              <span />
-              <span />
-              <span />
-            </div>
-          </article>
         </div>
       </section>
 
@@ -463,6 +549,15 @@ onMounted(async () => {
             @keydown="handleComposerKeydown"
           />
           <button
+            v-if="isSending"
+            class="send-button stop-button"
+            aria-label="停止生成"
+            @click="stopGeneration"
+          >
+            ■
+          </button>
+          <button
+            v-else
             class="send-button"
             :disabled="!canSend"
             aria-label="发送消息"

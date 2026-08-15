@@ -5,7 +5,10 @@ from unittest.mock import patch
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import tool
 
-from app.service.conversation import invoke_model_with_tools
+from app.service.conversation import (
+    invoke_model_with_tools,
+    invoke_model_with_tools_stream,
+)
 
 
 class FakeModel:
@@ -23,7 +26,64 @@ class FakeModel:
         return self.responses.pop(0)
 
 
+class FakeStreamingModel(FakeModel):
+    async def astream(self, messages):
+        self.invocations.append(list(messages))
+        response = self.responses.pop(0)
+        yield response
+
+
 class ToolLoopTests(unittest.IsolatedAsyncioTestCase):
+    async def test_streams_answer_deltas(self) -> None:
+        model = FakeStreamingModel([AIMessage(content="streamed answer")])
+
+        events = [
+            event
+            async for event in invoke_model_with_tools_stream(
+                model, [], [HumanMessage(content="hello")]
+            )
+        ]
+
+        self.assertEqual(events[0], {"type": "message.delta", "delta": "streamed answer"})
+        self.assertEqual(events[-1]["type"], "_model.response")
+
+    async def test_streams_tool_progress_and_resets_preamble(self) -> None:
+        @tool
+        async def echo(query: str) -> str:
+            """Return the query for testing."""
+            return query
+
+        model = FakeStreamingModel(
+            [
+                AIMessage(
+                    content="I will look that up.",
+                    tool_calls=[{
+                        "name": "echo",
+                        "args": {"query": "nano"},
+                        "id": "stream-call-1",
+                        "type": "tool_call",
+                    }],
+                ),
+                AIMessage(content="final streamed answer"),
+            ]
+        )
+
+        events = [
+            event
+            async for event in invoke_model_with_tools_stream(
+                model, [echo], [HumanMessage(content="search")]
+            )
+        ]
+        event_types = [event["type"] for event in events]
+
+        self.assertIn("message.reset", event_types)
+        self.assertIn("tool.started", event_types)
+        self.assertIn("tool.completed", event_types)
+        self.assertEqual(
+            [event["delta"] for event in events if event["type"] == "message.delta"][-1],
+            "final streamed answer",
+        )
+
     async def test_executes_tool_and_returns_final_answer(self) -> None:
         @tool
         async def echo(query: str) -> str:

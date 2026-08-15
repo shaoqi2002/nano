@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  consumeEventStream,
   documentContentUrl,
   uploadDocument,
 } from "../src/api.js";
@@ -35,4 +36,29 @@ test("uploads documents as multipart data without a JSON content type", async ()
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("parses SSE events split across arbitrary chunks", async () => {
+  const encoder = new TextEncoder();
+  const chunks = [
+    "event: tool.started\r\ndata: {\"call_id\":\"1\",",
+    "\"name\":\"web_search\"}\r\n\r\n: keep-alive\n\n",
+    "event: message.delta\ndata: {\"delta\":\"你好\"}\n\n",
+  ];
+  const response = {
+    body: new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    }),
+  };
+  const events = [];
+
+  await consumeEventStream(response, (event) => events.push(event));
+
+  assert.deepEqual(events, [
+    { type: "tool.started", call_id: "1", name: "web_search" },
+    { type: "message.delta", delta: "你好" },
+  ]);
 });

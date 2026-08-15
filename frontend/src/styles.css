@@ -610,6 +610,54 @@ button {
   padding-right: 7px;
 }
 
+.agent-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.agent-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 25px;
+  padding: 4px 9px;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  background: #282828;
+  color: #aaa;
+  font-size: 11px;
+}
+
+.agent-step__status {
+  width: 7px;
+  height: 7px;
+  border: 2px solid #777;
+  border-radius: 50%;
+}
+
+.agent-step--running .agent-step__status {
+  border-color: #72d6bf transparent #72d6bf #72d6bf;
+  animation: spin 700ms linear infinite;
+}
+
+.agent-step--completed .agent-step__status {
+  border: 0;
+  background: #72d6bf;
+  box-shadow: 0 0 0 2px rgb(114 214 191 / 12%);
+}
+
+.agent-step--failed .agent-step__status {
+  border: 0;
+  background: #d77a7a;
+}
+
+.agent-step__detail {
+  color: #707070;
+}
+
 .message-sources {
   display: flex;
   flex-wrap: wrap;
@@ -785,6 +833,11 @@ button {
 .send-button:disabled {
   cursor: default;
   opacity: 0.25;
+}
+
+.stop-button {
+  background: #e9e9e9;
+  font-size: 10px;
 }
 
 .composer-hint {
