@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref } from "vue";
 
 import {
   createConversation,
@@ -277,7 +277,7 @@ async function submitMessage() {
     content,
     created_at: new Date().toISOString(),
   };
-  const streamingMessage = {
+  const streamingMessage = reactive({
     id: `stream-${Date.now()}`,
     role: "assistant",
     content: "",
@@ -285,7 +285,7 @@ async function submitMessage() {
     steps: [],
     status: "streaming",
     created_at: new Date().toISOString(),
-  };
+  });
 
   messages.value.push(optimisticMessage, streamingMessage);
   updateConversationTitle(content);
