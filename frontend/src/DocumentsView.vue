@@ -229,11 +229,12 @@ onMounted(loadDocuments);
 
 <style scoped>
 .documents-page {
-  display: grid;
+  display: flex;
   min-width: 0;
   height: 100vh;
   flex: 1;
-  grid-template-rows: auto auto 1fr;
+  flex-direction: column;
+  overflow: hidden;
   background: #202020;
 }
 
@@ -315,6 +316,7 @@ onMounted(loadDocuments);
 .documents-layout {
   display: grid;
   min-height: 0;
+  flex: 1;
   grid-template-columns: minmax(240px, 310px) 1fr;
 }
 
