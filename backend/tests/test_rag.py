@@ -1,12 +1,46 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from app.model.document import Document
-from app.service.rag import build_rag_context, parse_document_chunks, public_sources
+from app.service.rag import (
+    build_rag_context,
+    parse_document_chunks,
+    public_sources,
+    select_relevant_sources,
+)
 
 
 class RagParsingTests(unittest.TestCase):
+    def test_relevance_gate_rejects_unrelated_query(self) -> None:
+        candidates = [
+            {"chunk_id": 1, "similarity": 0.44},
+            {"chunk_id": 2, "similarity": 0.38},
+        ]
+
+        with (
+            patch("app.service.rag.RAG_MIN_SIMILARITY", 0.25),
+            patch("app.service.rag.RAG_QUERY_MIN_SIMILARITY", 0.45),
+        ):
+            self.assertEqual(select_relevant_sources(candidates), [])
+
+    def test_relevance_gate_keeps_only_candidates_close_to_best_match(self) -> None:
+        candidates = [
+            {"chunk_id": 3, "similarity": 0.50},
+            {"chunk_id": 1, "similarity": 0.70},
+            {"chunk_id": 2, "similarity": 0.61},
+        ]
+
+        with (
+            patch("app.service.rag.RAG_MIN_SIMILARITY", 0.25),
+            patch("app.service.rag.RAG_QUERY_MIN_SIMILARITY", 0.45),
+            patch("app.service.rag.RAG_MAX_SCORE_DROP", 0.12),
+        ):
+            selected = select_relevant_sources(candidates)
+
+        self.assertEqual([source["chunk_id"] for source in selected], [1, 2])
+
     def test_markdown_preserves_heading_and_splits_content(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "notes.md"

@@ -9,7 +9,14 @@ from pypdf import PdfReader
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import RAG_CHUNK_OVERLAP, RAG_CHUNK_SIZE, RAG_MIN_SIMILARITY, RAG_TOP_K
+from app.core.config import (
+    RAG_CHUNK_OVERLAP,
+    RAG_CHUNK_SIZE,
+    RAG_MAX_SCORE_DROP,
+    RAG_MIN_SIMILARITY,
+    RAG_QUERY_MIN_SIMILARITY,
+    RAG_TOP_K,
+)
 from app.model.document import Document, DocumentChunk
 from app.service.embedding import embed_texts
 
@@ -165,12 +172,10 @@ async def retrieve_sources(session: AsyncSession, query: str) -> list[dict]:
         .limit(max(1, RAG_TOP_K))
     )
     rows = (await session.execute(statement)).all()
-    sources: list[dict] = []
+    candidates: list[dict] = []
     for chunk, document, raw_distance in rows:
         similarity = 1.0 - float(raw_distance)
-        if similarity < RAG_MIN_SIMILARITY:
-            continue
-        sources.append(
+        candidates.append(
             {
                 "document_id": str(document.id),
                 "document_name": document.original_name,
@@ -182,7 +187,33 @@ async def retrieve_sources(session: AsyncSession, query: str) -> list[dict]:
                 "content": chunk.content,
             }
         )
-    return sources
+    return select_relevant_sources(candidates)
+
+
+def select_relevant_sources(candidates: list[dict]) -> list[dict]:
+    """Reject unrelated queries and weak tail matches from vector retrieval."""
+    if not candidates:
+        return []
+
+    ordered = sorted(
+        candidates,
+        key=lambda source: float(source["similarity"]),
+        reverse=True,
+    )
+    best_similarity = float(ordered[0]["similarity"])
+    query_threshold = max(RAG_MIN_SIMILARITY, RAG_QUERY_MIN_SIMILARITY)
+    if best_similarity < query_threshold:
+        return []
+
+    score_floor = max(
+        RAG_MIN_SIMILARITY,
+        best_similarity - max(0.0, RAG_MAX_SCORE_DROP),
+    )
+    return [
+        source
+        for source in ordered
+        if float(source["similarity"]) >= score_floor
+    ]
 
 
 def build_rag_context(sources: list[dict]) -> str:

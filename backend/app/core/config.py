@@ -62,5 +62,9 @@ DOCUMENT_INDEX_POLL_SECONDS = float(
 )
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "6"))
 RAG_MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.25"))
+RAG_QUERY_MIN_SIMILARITY = float(
+    os.getenv("RAG_QUERY_MIN_SIMILARITY", "0.45")
+)
+RAG_MAX_SCORE_DROP = float(os.getenv("RAG_MAX_SCORE_DROP", "0.12"))
 RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "700"))
 RAG_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))

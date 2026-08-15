@@ -415,26 +415,27 @@ async def send_message_stream(
     if use_rag:
         started_at = time.monotonic()
         rag_error: str | None = None
-        yield {
-            "type": "tool.started",
-            "call_id": "rag-retrieval",
-            "name": "document_search",
-            "input": {"query": content},
-        }
         try:
             async with session.begin():
                 sources = await retrieve_sources(session, content)
         except (EmbeddingConfigurationError, EmbeddingServiceError) as error:
             logger.warning("RAG retrieval unavailable; continuing without it: %s", error)
             rag_error = "文档检索暂时不可用"
-        yield {
-            "type": "tool.failed" if rag_error else "tool.completed",
-            "call_id": "rag-retrieval",
-            "name": "document_search",
-            "duration_ms": round((time.monotonic() - started_at) * 1000),
-            "result_count": len(sources),
-            **({"message": rag_error} if rag_error else {}),
-        }
+        if sources or rag_error:
+            yield {
+                "type": "tool.started",
+                "call_id": "rag-retrieval",
+                "name": "document_search",
+                "input": {"query": content},
+            }
+            yield {
+                "type": "tool.failed" if rag_error else "tool.completed",
+                "call_id": "rag-retrieval",
+                "name": "document_search",
+                "duration_ms": round((time.monotonic() - started_at) * 1000),
+                "result_count": len(sources),
+                **({"message": rag_error} if rag_error else {}),
+            }
         if sources:
             yield {"type": "sources.ready", "sources": public_sources(sources)}
 
