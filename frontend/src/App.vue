@@ -8,6 +8,7 @@ import {
   listConversations,
   sendMessage,
 } from "./api";
+import DocumentsView from "./DocumentsView.vue";
 import { renderMarkdown } from "./markdown";
 
 
@@ -16,6 +17,7 @@ const API_KEY_STORAGE_KEY = "nano-deepseek-api-key";
 const TAVILY_API_KEY_STORAGE_KEY = "nano-tavily-api-key";
 
 const conversations = ref([]);
+const activeView = ref("chat");
 const activeConversationId = ref(localStorage.getItem(ACTIVE_KEY));
 const messages = ref([]);
 const draft = ref("");
@@ -96,6 +98,7 @@ async function scrollToBottom() {
 async function startNewConversation() {
   if (isLoading.value || isSending.value) return;
 
+  activeView.value = "chat";
   errorMessage.value = "";
   isLoading.value = true;
 
@@ -121,6 +124,7 @@ async function startNewConversation() {
 async function openConversation(id) {
   if (isSending.value) return;
 
+  activeView.value = "chat";
   if (id === activeConversationId.value && messages.value.length) {
     sidebarOpen.value = false;
     return;
@@ -146,6 +150,11 @@ async function openConversation(id) {
   } finally {
     isLoading.value = false;
   }
+}
+
+function openDocuments() {
+  activeView.value = "documents";
+  sidebarOpen.value = false;
 }
 
 async function removeConversation(id) {
@@ -307,6 +316,15 @@ onMounted(async () => {
         新对话
       </button>
 
+      <button
+        class="new-chat-button documents-button"
+        :class="{ 'documents-button--active': activeView === 'documents' }"
+        @click="openDocuments"
+      >
+        <span class="new-chat-button__icon">▤</span>
+        文档库
+      </button>
+
       <div class="history-label">最近对话</div>
       <nav class="conversation-list" aria-label="历史对话">
         <div
@@ -339,7 +357,7 @@ onMounted(async () => {
       </button>
     </aside>
 
-    <main class="chat-panel">
+    <main v-if="activeView === 'chat'" class="chat-panel">
       <header class="topbar">
         <button class="icon-button menu-button" aria-label="打开侧栏" @click="sidebarOpen = true">
           ☰
@@ -428,6 +446,8 @@ onMounted(async () => {
         <p class="composer-hint">Enter 发送 · Shift + Enter 换行</p>
       </footer>
     </main>
+
+    <DocumentsView v-else @back="activeView = 'chat'" />
 
     <div v-if="apiKeyDialogOpen" class="dialog-backdrop" @click.self="apiKeyDialogOpen = false">
       <form class="api-key-dialog" @submit.prevent="saveApiKey">

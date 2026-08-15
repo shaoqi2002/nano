@@ -128,6 +128,14 @@ button {
   background: #262626;
 }
 
+.documents-button {
+  margin-top: 3px;
+}
+
+.documents-button--active {
+  background: #292929;
+}
+
 .new-chat-button:disabled {
   cursor: wait;
   opacity: 0.55;

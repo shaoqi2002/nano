@@ -35,6 +35,36 @@ sources, and allows 45 seconds per extraction request. These limits can be
 changed with `WEB_EXTRACT_MAX_URLS`, `WEB_EXTRACT_MAX_CONTENT_LENGTH`, and
 `WEB_EXTRACT_TIMEOUT_SECONDS`.
 
+## Backblaze B2 document storage
+
+The document library stores only metadata in PostgreSQL. Original files are
+kept in a private Backblaze B2 bucket through its S3-compatible API. Create a
+bucket-restricted application key with read and write access, then add the
+following values to `.env.production`:
+
+```sh
+OBJECT_STORAGE_ENDPOINT_URL=https://s3.us-west-000.backblazeb2.com
+OBJECT_STORAGE_REGION=us-west-000
+OBJECT_STORAGE_ACCESS_KEY_ID=your-key-id
+OBJECT_STORAGE_SECRET_ACCESS_KEY=your-application-key
+OBJECT_STORAGE_BUCKET=your-bucket-name
+DOCUMENT_MAX_BYTES=26214400
+```
+
+Use the exact endpoint displayed on the B2 bucket page; the `us-west-000`
+value above is only a placeholder. Keep the bucket private. The application
+key is a server secret and must never be placed in a frontend environment
+variable or committed to Git.
+
+The reader supports PDF, DOCX, Markdown, plain text, CSV, JSON, log files, and
+common raster images. Uploads are limited to 25 MiB by default. PostgreSQL
+tables are created automatically when the backend starts.
+
+The current Nano application has no user account or document authorization
+layer. Keep port 8088 behind the LAN, Tailscale, or another authenticated
+reverse proxy. Anyone who can reach the application can otherwise upload,
+download, and delete documents.
+
 ## Verification
 
 ```sh
