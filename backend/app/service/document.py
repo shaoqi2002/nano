@@ -160,6 +160,21 @@ async def delete_document(session: AsyncSession, document_id: UUID) -> None:
         await remove_document(session, document)
 
 
+async def reindex_document(session: AsyncSession, document_id: UUID) -> Document:
+    async with session.begin():
+        document = await get_document(session, document_id)
+        if document is None:
+            raise DocumentNotFoundError
+        if document.preview_kind == "image":
+            raise InvalidDocumentError("图片需要 OCR，当前版本暂未启用")
+        document.index_status = "pending"
+        document.index_error = None
+        document.indexed_at = None
+        await session.flush()
+        await session.refresh(document)
+        return document
+
+
 def decode_text(content: bytes) -> str:
     for encoding in ("utf-8-sig", "utf-8", "gb18030"):
         try:

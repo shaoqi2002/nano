@@ -1,17 +1,22 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 import {
   deleteDocument,
   documentContentUrl,
   getDocumentText,
   listDocuments,
+  reindexDocument,
   uploadDocument,
 } from "./api";
 import { renderMarkdown } from "./markdown";
 
 
 const emit = defineEmits(["back"]);
+const props = defineProps({
+  initialDocumentId: { type: String, default: null },
+  initialPage: { type: Number, default: null },
+});
 const documents = ref([]);
 const activeDocumentId = ref(null);
 const textPreview = ref("");
@@ -20,15 +25,32 @@ const isLoading = ref(true);
 const isUploading = ref(false);
 const isDeleting = ref(false);
 const isPreviewLoading = ref(false);
+const isReindexing = ref(false);
 const fileInput = ref(null);
+let pollingTimer = null;
+let targetApplied = false;
 
 const activeDocument = computed(() =>
   documents.value.find((document) => document.id === activeDocumentId.value),
 );
 
-const contentUrl = computed(() =>
-  activeDocument.value ? documentContentUrl(activeDocument.value.id) : "",
-);
+const contentUrl = computed(() => activeDocument.value
+  ? `${documentContentUrl(activeDocument.value.id)}${props.initialPage && activeDocument.value.id === props.initialDocumentId ? `#page=${props.initialPage}` : ""}`
+  : "");
+
+const hasActiveIndexJobs = computed(() => documents.value.some(
+  (document) => ["pending", "processing"].includes(document.index_status),
+));
+
+function indexLabel(status) {
+  return {
+    pending: "等待索引",
+    processing: "正在索引",
+    ready: "RAG 已就绪",
+    failed: "索引失败",
+    unsupported: "暂不支持 RAG",
+  }[status] || status;
+}
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -56,18 +78,36 @@ function fileIcon(document) {
   }[document.preview_kind] || "FILE";
 }
 
-async function loadDocuments() {
-  isLoading.value = true;
+async function loadDocuments(background = false) {
+  if (!background) isLoading.value = true;
   errorMessage.value = "";
   try {
     documents.value = await listDocuments();
-    if (!documents.value.some((item) => item.id === activeDocumentId.value)) {
+    if (!targetApplied && props.initialDocumentId && documents.value.some((item) => item.id === props.initialDocumentId)) {
+      activeDocumentId.value = props.initialDocumentId;
+      targetApplied = true;
+    } else if (!documents.value.some((item) => item.id === activeDocumentId.value)) {
       activeDocumentId.value = documents.value[0]?.id || null;
     }
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
-    isLoading.value = false;
+    if (!background) isLoading.value = false;
+  }
+}
+
+async function reindexActiveDocument() {
+  if (!activeDocument.value) return;
+  isReindexing.value = true;
+  errorMessage.value = "";
+  try {
+    const updated = await reindexDocument(activeDocument.value.id);
+    const index = documents.value.findIndex((item) => item.id === updated.id);
+    if (index >= 0) documents.value[index] = updated;
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    isReindexing.value = false;
   }
 }
 
@@ -121,7 +161,20 @@ watch(activeDocument, async (document) => {
   }
 }, { immediate: true });
 
-onMounted(loadDocuments);
+watch(() => props.initialDocumentId, (documentId) => {
+  if (documentId) {
+    activeDocumentId.value = documentId;
+    targetApplied = true;
+  }
+});
+
+onMounted(async () => {
+  await loadDocuments();
+  pollingTimer = window.setInterval(() => {
+    if (hasActiveIndexJobs.value) loadDocuments(true);
+  }, 4000);
+});
+onUnmounted(() => window.clearInterval(pollingTimer));
 </script>
 
 <template>
@@ -169,6 +222,9 @@ onMounted(loadDocuments);
           <span class="document-row__body">
             <strong>{{ document.original_name }}</strong>
             <span>{{ formatBytes(document.size_bytes) }} · {{ formatDate(document.created_at) }}</span>
+            <span class="index-state" :class="`index-state--${document.index_status}`">
+              {{ indexLabel(document.index_status) }}
+            </span>
           </span>
         </button>
       </aside>
@@ -181,8 +237,18 @@ onMounted(loadDocuments);
             <div>
               <strong>{{ activeDocument.original_name }}</strong>
               <span>{{ formatBytes(activeDocument.size_bytes) }}</span>
+              <span
+                class="index-state"
+                :class="`index-state--${activeDocument.index_status}`"
+                :title="activeDocument.index_error || ''"
+              >{{ indexLabel(activeDocument.index_status) }}</span>
             </div>
             <div class="reader-actions">
+              <button
+                v-if="['ready', 'failed'].includes(activeDocument.index_status)"
+                :disabled="isReindexing"
+                @click="reindexActiveDocument"
+              >{{ isReindexing ? "提交中…" : "重新索引" }}</button>
               <a :href="documentContentUrl(activeDocument.id, true)">下载</a>
               <button :disabled="isDeleting" @click="removeActiveDocument">
                 {{ isDeleting ? "删除中…" : "删除" }}
@@ -421,6 +487,24 @@ onMounted(loadDocuments);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.index-state {
+  width: fit-content;
+  color: #a3a3a3 !important;
+  font-size: 10px !important;
+}
+
+.index-state--ready {
+  color: #82c9b9 !important;
+}
+
+.index-state--failed {
+  color: #f3a7a7 !important;
+}
+
+.index-state--processing {
+  color: #e7c981 !important;
 }
 
 .reader {

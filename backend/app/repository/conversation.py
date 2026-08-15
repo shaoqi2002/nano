@@ -94,11 +94,13 @@ async def add_message(
     conversation_id: UUID,
     role: str,
     content: str,
+    sources: list[dict] | None = None,
 ) -> Message:
     message = Message(
         conversation_id=conversation_id,
         role=role,
         content=content,
+        sources=sources or [],
     )
     session.add(message)
     await session.flush()

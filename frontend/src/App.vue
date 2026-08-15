@@ -15,6 +15,7 @@ import { renderMarkdown } from "./markdown";
 const ACTIVE_KEY = "nano-agent-active-conversation";
 const API_KEY_STORAGE_KEY = "nano-deepseek-api-key";
 const TAVILY_API_KEY_STORAGE_KEY = "nano-tavily-api-key";
+const RAG_STORAGE_KEY = "nano-rag-enabled";
 
 const conversations = ref([]);
 const activeView = ref("chat");
@@ -33,6 +34,8 @@ const tavilyApiKey = ref(localStorage.getItem(TAVILY_API_KEY_STORAGE_KEY) || "")
 const tavilyApiKeyDraft = ref("");
 const apiKeyDialogOpen = ref(false);
 const deletingConversationId = ref(null);
+const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
+const documentTarget = ref({ id: null, page: null });
 
 const activeConversation = computed(() =>
   conversations.value.find((item) => item.id === activeConversationId.value),
@@ -153,8 +156,22 @@ async function openConversation(id) {
 }
 
 function openDocuments() {
+  documentTarget.value = { id: null, page: null };
   activeView.value = "documents";
   sidebarOpen.value = false;
+}
+
+function openSource(source) {
+  documentTarget.value = {
+    id: source.document_id,
+    page: source.page_number || null,
+  };
+  activeView.value = "documents";
+}
+
+function toggleRag() {
+  useRag.value = !useRag.value;
+  localStorage.setItem(RAG_STORAGE_KEY, String(useRag.value));
 }
 
 async function removeConversation(id) {
@@ -225,6 +242,7 @@ async function submitMessage() {
       content,
       apiKey.value,
       tavilyApiKey.value,
+      useRag.value,
     );
     const history = await getMessages(conversationId);
     messages.value = history.messages;
@@ -394,6 +412,16 @@ onMounted(async () => {
                 v-html="renderMarkdown(message.content)"
               />
               <div v-else class="message__content">{{ message.content }}</div>
+              <div v-if="message.role === 'assistant' && message.sources?.length" class="message-sources">
+                <button
+                  v-for="source in message.sources"
+                  :key="source.chunk_id"
+                  type="button"
+                  @click="openSource(source)"
+                >
+                  {{ source.document_name }}<span v-if="source.page_number"> · 第 {{ source.page_number }} 页</span>
+                </button>
+              </div>
               <div class="message__meta">
                 <span>{{ formatDate(message.created_at) }}</span>
                 <button
@@ -443,11 +471,25 @@ onMounted(async () => {
             ↑
           </button>
         </div>
-        <p class="composer-hint">Enter 发送 · Shift + Enter 换行</p>
+        <div class="composer-options">
+          <button
+            type="button"
+            class="rag-toggle"
+            :class="{ 'rag-toggle--active': useRag }"
+            :aria-pressed="useRag"
+            @click="toggleRag"
+          >文档 RAG {{ useRag ? "已开启" : "已关闭" }}</button>
+          <p class="composer-hint">Enter 发送 · Shift + Enter 换行</p>
+        </div>
       </footer>
     </main>
 
-    <DocumentsView v-else @back="activeView = 'chat'" />
+    <DocumentsView
+      v-else
+      :initial-document-id="documentTarget.id"
+      :initial-page="documentTarget.page"
+      @back="activeView = 'chat'"
+    />
 
     <div v-if="apiKeyDialogOpen" class="dialog-backdrop" @click.self="apiKeyDialogOpen = false">
       <form class="api-key-dialog" @submit.prevent="saveApiKey">

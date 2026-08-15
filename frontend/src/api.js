@@ -31,7 +31,7 @@ export function getMessages(conversationId) {
   return request(`/conversations/${conversationId}/messages`);
 }
 
-export function sendMessage(conversationId, message, apiKey, tavilyApiKey) {
+export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true) {
   const headers = {
     "X-DeepSeek-API-Key": apiKey,
   };
@@ -42,7 +42,7 @@ export function sendMessage(conversationId, message, apiKey, tavilyApiKey) {
   return request(`/conversations/${conversationId}/messages`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, use_rag: useRag }),
   });
 }
 
@@ -62,6 +62,10 @@ export function uploadDocument(file) {
 
 export function deleteDocument(documentId) {
   return request(`/documents/${documentId}`, { method: "DELETE" });
+}
+
+export function reindexDocument(documentId) {
+  return request(`/documents/${documentId}/reindex`, { method: "POST" });
 }
 
 export function documentContentUrl(documentId, download = false) {

@@ -76,6 +76,7 @@ async def create_message(
             content=request.message,
             api_key=api_key,
             tavily_api_key=tavily_api_key,
+            use_rag=request.use_rag,
         )
     except ConversationNotFoundError as error:
         raise HTTPException(

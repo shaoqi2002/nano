@@ -48,3 +48,19 @@ DOCUMENT_CACHE_DIR = Path(os.getenv("DOCUMENT_CACHE_DIR", "/data/document-cache"
 DOCUMENT_CACHE_MAX_BYTES = int(
     os.getenv("DOCUMENT_CACHE_MAX_BYTES", str(5 * 1024 * 1024 * 1024))
 )
+EMBEDDING_BASE_URL = os.getenv(
+    "EMBEDDING_BASE_URL",
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v4")
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "8"))
+EMBEDDING_TIMEOUT_SECONDS = float(os.getenv("EMBEDDING_TIMEOUT_SECONDS", "60"))
+DOCUMENT_INDEX_POLL_SECONDS = float(
+    os.getenv("DOCUMENT_INDEX_POLL_SECONDS", "5")
+)
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "6"))
+RAG_MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.25"))
+RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "700"))
+RAG_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))

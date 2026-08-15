@@ -7,6 +7,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class SendMessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=10_000)
+    use_rag: bool = True
+
+
+class RagSourceResponse(BaseModel):
+    document_id: UUID
+    document_name: str
+    chunk_id: int
+    page_number: int | None = None
+    section_title: str | None = None
+    excerpt: str
+    similarity: float
 
 
 class MessageResponse(BaseModel):
@@ -15,6 +26,7 @@ class MessageResponse(BaseModel):
     id: int
     role: Literal["user", "assistant"]
     content: str
+    sources: list[RagSourceResponse] = Field(default_factory=list)
     created_at: datetime
 
 

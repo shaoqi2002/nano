@@ -2,7 +2,7 @@ name: nano
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -49,6 +49,17 @@ services:
       DOCUMENT_MAX_BYTES: ${DOCUMENT_MAX_BYTES:-26214400}
       DOCUMENT_CACHE_DIR: /data/document-cache
       DOCUMENT_CACHE_MAX_BYTES: ${DOCUMENT_CACHE_MAX_BYTES:-5368709120}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v4}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-8}
+      EMBEDDING_TIMEOUT_SECONDS: ${EMBEDDING_TIMEOUT_SECONDS:-60}
+      DOCUMENT_INDEX_POLL_SECONDS: ${DOCUMENT_INDEX_POLL_SECONDS:-5}
+      RAG_TOP_K: ${RAG_TOP_K:-6}
+      RAG_MIN_SIMILARITY: ${RAG_MIN_SIMILARITY:-0.25}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-700}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-100}
     volumes:
       - ${DOCUMENT_CACHE_PATH:-./document_cache}:/data/document-cache
     depends_on:

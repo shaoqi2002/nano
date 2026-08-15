@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgresUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -40,6 +40,9 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    sources: Mapped[list[dict]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

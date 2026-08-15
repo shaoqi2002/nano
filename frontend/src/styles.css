@@ -571,6 +571,28 @@ button {
   padding-right: 7px;
 }
 
+.message-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.message-sources button {
+  padding: 5px 9px;
+  border: 1px solid #414141;
+  border-radius: 7px;
+  background: #292929;
+  color: #a9d8cd;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.message-sources button:hover {
+  border-color: #5d756f;
+  background: #303735;
+}
+
 .copy-button {
   padding: 3px 6px;
   border-radius: 5px;
@@ -619,6 +641,36 @@ button {
   width: min(780px, 100%);
   margin-right: auto;
   margin-left: auto;
+}
+
+.composer-options {
+  display: flex;
+  width: min(780px, 100%);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px auto 0;
+}
+
+.composer-options .composer-hint {
+  width: auto;
+  margin: 0;
+}
+
+.rag-toggle {
+  padding: 4px 8px;
+  border: 1px solid #414141;
+  border-radius: 999px;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.rag-toggle--active {
+  border-color: #4f746b;
+  background: #26332f;
+  color: #a9d8cd;
 }
 
 .composer-box {

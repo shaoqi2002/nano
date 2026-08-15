@@ -13,4 +13,9 @@ class DocumentResponse(BaseModel):
     preview_kind: str
     size_bytes: int
     checksum_sha256: str
+    index_status: str
+    index_error: str | None
+    indexed_at: datetime | None
+    parser_version: str | None
+    embedding_model: str | None
     created_at: datetime

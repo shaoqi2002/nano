@@ -24,6 +24,7 @@ from app.service.document import (
     delete_document,
     document_text,
     get_documents,
+    reindex_document,
     require_document,
 )
 from app.service.document_cache import DocumentCacheError
@@ -127,3 +128,17 @@ async def remove_document_endpoint(
     except (ObjectStorageConfigurationError, ObjectStorageError) as error:
         raise storage_http_error(error) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{document_id}/reindex", response_model=DocumentResponse)
+async def reindex_document_endpoint(
+    document_id: UUID,
+    session: SessionDependency,
+) -> DocumentResponse:
+    try:
+        document = await reindex_document(session, document_id)
+    except DocumentNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Document not found") from error
+    except InvalidDocumentError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return DocumentResponse.model_validate(document)
