@@ -17,7 +17,12 @@ from app.repository.document import (
     remove_document,
 )
 from app.service.document_cache import DocumentCacheError, document_cache
-from app.service.object_storage import delete_object, download_object, upload_object
+from app.service.object_storage import (
+    delete_object,
+    download_object,
+    upload_object,
+    upload_path,
+)
 
 
 ALLOWED_EXTENSIONS = {
@@ -93,16 +98,10 @@ async def create_document(
     if size == 0:
         raise InvalidDocumentError("不能上传空文件")
 
-    await upload.seek(0)
-    await run_in_threadpool(
-        upload_object,
-        object_key,
-        upload.file,
-        content_type,
-    )
+    cached_path: Path | None = None
     try:
         await upload.seek(0)
-        await run_in_threadpool(
+        cached_path = await run_in_threadpool(
             document_cache.store_stream,
             object_key,
             upload.file,
@@ -111,6 +110,29 @@ async def create_document(
         )
     except DocumentCacheError:
         logger.warning("Unable to populate document cache after upload", exc_info=True)
+    try:
+        if cached_path is not None:
+            await run_in_threadpool(
+                upload_path,
+                object_key,
+                cached_path,
+                content_type,
+            )
+        else:
+            await upload.seek(0)
+            await run_in_threadpool(
+                upload_object,
+                object_key,
+                upload.file,
+                content_type,
+            )
+    except Exception:
+        if cached_path is not None:
+            try:
+                await run_in_threadpool(document_cache.remove, object_key)
+            except DocumentCacheError:
+                logger.warning("Unable to remove failed upload cache", exc_info=True)
+        raise
     document = Document(
         id=document_id,
         original_name=original_name,

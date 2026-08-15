@@ -75,6 +75,24 @@ def upload_object(
         raise ObjectStorageError("上传到对象存储失败") from error
 
 
+def upload_path(
+    object_key: str,
+    path: Path,
+    content_type: str,
+) -> None:
+    """Upload a local file without transferring ownership of a request stream."""
+    try:
+        _client().upload_file(
+            str(path),
+            OBJECT_STORAGE_BUCKET,
+            object_key,
+            ExtraArgs={"ContentType": content_type},
+            Config=UPLOAD_CONFIG,
+        )
+    except (BotoCoreError, ClientError, OSError) as error:
+        raise ObjectStorageError("上传到对象存储失败") from error
+
+
 def delete_object(object_key: str) -> None:
     try:
         _client().delete_object(Bucket=OBJECT_STORAGE_BUCKET, Key=object_key)
