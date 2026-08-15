@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from functools import lru_cache
+from pathlib import Path
 from typing import BinaryIO
 
 import boto3
@@ -79,6 +80,18 @@ def delete_object(object_key: str) -> None:
         _client().delete_object(Bucket=OBJECT_STORAGE_BUCKET, Key=object_key)
     except (BotoCoreError, ClientError) as error:
         raise ObjectStorageError("从对象存储删除文件失败") from error
+
+
+def download_object(object_key: str, destination: Path) -> None:
+    try:
+        _client().download_file(
+            OBJECT_STORAGE_BUCKET,
+            object_key,
+            str(destination),
+            Config=UPLOAD_CONFIG,
+        )
+    except (BotoCoreError, ClientError, OSError) as error:
+        raise ObjectStorageError("从对象存储下载文件失败") from error
 
 
 def object_stream(

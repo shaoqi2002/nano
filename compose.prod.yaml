@@ -39,6 +39,10 @@ services:
       OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_SECRET_ACCESS_KEY:-}
       OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-}
       DOCUMENT_MAX_BYTES: ${DOCUMENT_MAX_BYTES:-26214400}
+      DOCUMENT_CACHE_DIR: /data/document-cache
+      DOCUMENT_CACHE_MAX_BYTES: ${DOCUMENT_CACHE_MAX_BYTES:-5368709120}
+    volumes:
+      - ${DOCUMENT_CACHE_PATH:-./document_cache}:/data/document-cache
     depends_on:
       postgres:
         condition: service_healthy

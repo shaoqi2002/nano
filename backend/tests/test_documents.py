@@ -1,9 +1,11 @@
 import unittest
+import hashlib
 from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from docx import Document as WordDocument
 
-from app.api.document import valid_range_header
 from app.service.document import (
     InvalidDocumentError,
     decode_text,
@@ -11,6 +13,7 @@ from app.service.document import (
     safe_filename,
     word_text,
 )
+from app.service.document_cache import DocumentCache, DocumentCacheError
 
 
 class DocumentServiceTests(unittest.TestCase):
@@ -47,13 +50,63 @@ class DocumentServiceTests(unittest.TestCase):
         self.assertIn("标题", extracted)
         self.assertIn("名称\tNano", extracted)
 
-    def test_range_header_validation(self) -> None:
-        self.assertTrue(valid_range_header("bytes=0-1023"))
-        self.assertTrue(valid_range_header("bytes=1024-"))
-        self.assertTrue(valid_range_header("bytes=-512"))
-        self.assertFalse(valid_range_header("bytes=-"))
-        self.assertFalse(valid_range_header("bytes=20-10"))
-        self.assertFalse(valid_range_header("bytes=0-1,4-5"))
+
+
+class DocumentCacheTests(unittest.TestCase):
+    def test_downloads_once_then_uses_cached_file(self) -> None:
+        payload = b"cached document"
+        checksum = hashlib.sha256(payload).hexdigest()
+        calls = []
+        with TemporaryDirectory() as directory:
+            cache = DocumentCache(Path(directory), maximum_bytes=1024)
+
+            def download(object_key: str, destination: Path) -> None:
+                calls.append(object_key)
+                destination.write_bytes(payload)
+
+            first = cache.ensure("documents/1/original.pdf", len(payload), checksum, download)
+            second = cache.ensure("documents/1/original.pdf", len(payload), checksum, download)
+
+            self.assertEqual(first, second)
+            self.assertEqual(first.read_bytes(), payload)
+            self.assertEqual(calls, ["documents/1/original.pdf"])
+
+    def test_rejects_download_with_wrong_checksum(self) -> None:
+        payload = b"expected"
+        checksum = hashlib.sha256(payload).hexdigest()
+        with TemporaryDirectory() as directory:
+            cache = DocumentCache(Path(directory), maximum_bytes=1024)
+
+            with self.assertRaisesRegex(DocumentCacheError, "校验失败"):
+                cache.ensure(
+                    "documents/1/original.pdf",
+                    len(payload),
+                    checksum,
+                    lambda _key, destination: destination.write_bytes(b"tampered"),
+                )
+
+            self.assertFalse(cache.path_for("documents/1/original.pdf").exists())
+
+    def test_evicts_oldest_file_when_capacity_is_reached(self) -> None:
+        first_payload = b"first"
+        second_payload = b"second"
+        with TemporaryDirectory() as directory:
+            cache = DocumentCache(Path(directory), maximum_bytes=len(second_payload))
+            first_path = cache.store_stream(
+                "documents/1/original.txt",
+                BytesIO(first_payload),
+                len(first_payload),
+                hashlib.sha256(first_payload).hexdigest(),
+            )
+            second_path = cache.store_stream(
+                "documents/2/original.txt",
+                BytesIO(second_payload),
+                len(second_payload),
+                hashlib.sha256(second_payload).hexdigest(),
+            )
+
+            self.assertFalse(first_path.exists())
+            self.assertEqual(second_path.read_bytes(), second_payload)
 
 
 if __name__ == "__main__":

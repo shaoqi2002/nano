@@ -44,3 +44,7 @@ OBJECT_STORAGE_SECRET_ACCESS_KEY = os.getenv(
 )
 OBJECT_STORAGE_BUCKET = os.getenv("OBJECT_STORAGE_BUCKET", "")
 DOCUMENT_MAX_BYTES = int(os.getenv("DOCUMENT_MAX_BYTES", str(25 * 1024 * 1024)))
+DOCUMENT_CACHE_DIR = Path(os.getenv("DOCUMENT_CACHE_DIR", "/data/document-cache"))
+DOCUMENT_CACHE_MAX_BYTES = int(
+    os.getenv("DOCUMENT_CACHE_MAX_BYTES", str(5 * 1024 * 1024 * 1024))
+)

@@ -1,5 +1,6 @@
 import hashlib
-from pathlib import PurePosixPath
+import logging
+from pathlib import Path, PurePosixPath
 from uuid import UUID, uuid4
 
 from docx import Document as WordDocument
@@ -15,7 +16,8 @@ from app.repository.document import (
     list_documents,
     remove_document,
 )
-from app.service.object_storage import delete_object, read_object, upload_object
+from app.service.document_cache import DocumentCacheError, document_cache
+from app.service.object_storage import delete_object, download_object, upload_object
 
 
 ALLOWED_EXTENSIONS = {
@@ -37,6 +39,7 @@ ALLOWED_EXTENSIONS = {
     ".webp": ("image", "image/webp"),
 }
 TEXT_PREVIEW_MAX_BYTES = 5 * 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 class DocumentNotFoundError(Exception):
@@ -97,6 +100,17 @@ async def create_document(
         upload.file,
         content_type,
     )
+    try:
+        await upload.seek(0)
+        await run_in_threadpool(
+            document_cache.store_stream,
+            object_key,
+            upload.file,
+            size,
+            digest.hexdigest(),
+        )
+    except DocumentCacheError:
+        logger.warning("Unable to populate document cache after upload", exc_info=True)
     document = Document(
         id=document_id,
         original_name=original_name,
@@ -112,6 +126,10 @@ async def create_document(
             return await add_document(session, document)
     except Exception:
         await run_in_threadpool(delete_object, object_key)
+        try:
+            await run_in_threadpool(document_cache.remove, object_key)
+        except DocumentCacheError:
+            logger.warning("Unable to remove rolled-back document cache", exc_info=True)
         raise
 
 
@@ -135,6 +153,10 @@ async def delete_document(session: AsyncSession, document_id: UUID) -> None:
         if document is None:
             raise DocumentNotFoundError
         await run_in_threadpool(delete_object, document.object_key)
+        try:
+            await run_in_threadpool(document_cache.remove, document.object_key)
+        except DocumentCacheError:
+            logger.warning("Unable to remove deleted document cache", exc_info=True)
         await remove_document(session, document)
 
 
@@ -162,10 +184,20 @@ def word_text(content: bytes) -> str:
     return "\n\n".join(blocks)
 
 
+def cached_document_path(document: Document) -> Path:
+    return document_cache.ensure(
+        document.object_key,
+        document.size_bytes,
+        document.checksum_sha256,
+        download_object,
+    )
+
+
 def document_text(document: Document) -> str:
     if document.preview_kind not in {"text", "markdown", "word"}:
         raise InvalidDocumentError("该文件不支持文本预览")
-    content = read_object(document.object_key, TEXT_PREVIEW_MAX_BYTES)
+    path = cached_document_path(document)
+    content = document_cache.read_bytes(path, TEXT_PREVIEW_MAX_BYTES)
     if document.preview_kind == "word":
         return word_text(content)
     return decode_text(content)

@@ -174,10 +174,7 @@ onMounted(loadDocuments);
       </aside>
 
       <section class="reader">
-        <div v-if="!activeDocument" class="reader-empty">
-          <div class="reader-empty__icon">N</div>
-          <strong>选择一份文档开始阅读</strong>
-        </div>
+        <div v-if="!activeDocument" />
 
         <template v-else>
           <header class="reader-toolbar">
@@ -338,8 +335,7 @@ onMounted(loadDocuments);
 }
 
 .document-state,
-.reader-status,
-.reader-empty {
+.reader-status {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -432,23 +428,6 @@ onMounted(loadDocuments);
   min-width: 0;
   min-height: 0;
   grid-template-rows: auto 1fr;
-}
-
-.reader-empty {
-  height: 100%;
-  flex-direction: column;
-  gap: 13px;
-}
-
-.reader-empty__icon {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border-radius: 15px;
-  background: #f2f2f2;
-  color: #171717;
-  font-weight: 800;
 }
 
 .reader-toolbar {

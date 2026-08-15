@@ -49,6 +49,8 @@ OBJECT_STORAGE_ACCESS_KEY_ID=your-key-id
 OBJECT_STORAGE_SECRET_ACCESS_KEY=your-application-key
 OBJECT_STORAGE_BUCKET=your-bucket-name
 DOCUMENT_MAX_BYTES=26214400
+DOCUMENT_CACHE_PATH=./document_cache
+DOCUMENT_CACHE_MAX_BYTES=5368709120
 ```
 
 Use the exact endpoint displayed on the B2 bucket page; the `us-west-000`
@@ -59,6 +61,14 @@ variable or committed to Git.
 The reader supports PDF, DOCX, Markdown, plain text, CSV, JSON, log files, and
 common raster images. Uploads are limited to 25 MiB by default. PostgreSQL
 tables are created automatically when the backend starts.
+
+Uploaded documents are cached immediately under `DOCUMENT_CACHE_PATH`.
+Existing cloud-only documents are downloaded on first access and subsequent
+reads use the local copy. Cached files are checksum-verified and the oldest
+accessed files are evicted automatically when the default 5 GiB limit is
+reached. Both the cache path and size limit can be changed in
+`.env.production`; the cache is disposable and Backblaze B2 remains the source
+of truth.
 
 The current Nano application has no user account or document authorization
 layer. Keep port 8088 behind the LAN, Tailscale, or another authenticated

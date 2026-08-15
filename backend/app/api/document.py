@@ -1,19 +1,16 @@
-import re
 from typing import Annotated
-from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import (
     APIRouter,
     Depends,
     File,
-    Header,
     HTTPException,
     Query,
     UploadFile,
     status,
 )
-from fastapi.responses import PlainTextResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -22,32 +19,22 @@ from app.schema.document import DocumentResponse
 from app.service.document import (
     DocumentNotFoundError,
     InvalidDocumentError,
+    cached_document_path,
     create_document,
     delete_document,
     document_text,
     get_documents,
     require_document,
 )
+from app.service.document_cache import DocumentCacheError
 from app.service.object_storage import (
     ObjectStorageConfigurationError,
     ObjectStorageError,
-    object_stream,
 )
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
-RANGE_PATTERN = re.compile(r"^bytes=(\d*)-(\d*)$")
-
-
-def valid_range_header(value: str) -> bool:
-    match = RANGE_PATTERN.fullmatch(value)
-    if not match:
-        return False
-    start, end = match.groups()
-    if not start and not end:
-        return False
-    return not (start and end and int(start) > int(end))
 
 
 def storage_http_error(error: Exception) -> HTTPException:
@@ -83,46 +70,29 @@ async def read_document_content(
     document_id: UUID,
     session: SessionDependency,
     download: Annotated[bool, Query()] = False,
-    range_header: Annotated[str | None, Header(alias="Range")] = None,
 ) -> Response:
-    if range_header and not valid_range_header(range_header):
-        raise HTTPException(status_code=416, detail="Invalid byte range")
     try:
         document = await require_document(session, document_id)
-        chunks, content_length, content_range = await run_in_threadpool(
-            object_stream,
-            document.object_key,
-            range_header,
+        path = await run_in_threadpool(
+            cached_document_path,
+            document,
         )
     except DocumentNotFoundError as error:
         raise HTTPException(status_code=404, detail="Document not found") from error
     except (ObjectStorageConfigurationError, ObjectStorageError) as error:
         raise storage_http_error(error) from error
+    except DocumentCacheError as error:
+        raise HTTPException(status_code=507, detail=str(error)) from error
 
-    disposition = "attachment" if download else "inline"
-    ascii_name = "document" + (
-        "." + document.original_name.rsplit(".", 1)[-1]
-        if "." in document.original_name
-        else ""
-    )
-    encoded_name = quote(document.original_name, safe="")
-    headers = {
-        "Content-Disposition": (
-            f'{disposition}; filename="{ascii_name}"; '
-            f"filename*=UTF-8''{encoded_name}"
-        ),
-        "X-Content-Type-Options": "nosniff",
-        "Accept-Ranges": "bytes",
-    }
-    if content_length is not None:
-        headers["Content-Length"] = str(content_length)
-    if content_range:
-        headers["Content-Range"] = content_range
-    return StreamingResponse(
-        chunks,
+    return FileResponse(
+        path,
         media_type=document.content_type,
-        headers=headers,
-        status_code=206 if content_range else 200,
+        filename=document.original_name,
+        content_disposition_type="attachment" if download else "inline",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, max-age=3600",
+        },
     )
 
 
@@ -140,6 +110,8 @@ async def read_document_text(
         raise HTTPException(status_code=400, detail=str(error)) from error
     except (ObjectStorageConfigurationError, ObjectStorageError) as error:
         raise storage_http_error(error) from error
+    except DocumentCacheError as error:
+        raise HTTPException(status_code=507, detail=str(error)) from error
     return PlainTextResponse(content)
 
 
