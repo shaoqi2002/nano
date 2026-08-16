@@ -11,6 +11,7 @@ import {
   updateEvalCase,
 } from "./api";
 import EvalCaseForm from "./EvalCaseForm.vue";
+import { renderMarkdown } from "./markdown";
 
 
 const emit = defineEmits(["back", "configure-keys"]);
@@ -339,12 +340,21 @@ onMounted(async () => {
                   <span>依据性 {{ result.metrics.judge.groundedness }}/5</span>
                   <span>指令遵循 {{ result.metrics.judge.instruction_following }}/5</span>
                 </div>
-                <p>{{ result.metrics.judge.reason }}</p>
+                <section class="eval-markdown-panel">
+                  <strong>评分说明</strong>
+                  <div
+                    class="markdown-body"
+                    v-html="renderMarkdown(result.metrics.judge.reason)"
+                  />
+                </section>
               </div>
               <p v-else-if="result.metrics?.judge_error" class="eval-result__error">
                 Judge 失败，已回退到确定性评分：{{ result.metrics.judge_error }}
               </p>
-              <pre>{{ result.output }}</pre>
+              <section class="eval-markdown-panel eval-output-markdown">
+                <strong>Agent 输出</strong>
+                <div class="markdown-body" v-html="renderMarkdown(result.output)" />
+              </section>
             </details>
           </article>
         </div>
@@ -439,7 +449,12 @@ onMounted(async () => {
 .eval-checks { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .eval-checks span { padding: 4px 6px; border-radius: 5px; background: #29413a; color: #9ed8cb; font-size: 9px; }
 .eval-checks .eval-check--failed { background: #4a2929; color: #e6a0a0; }
-.eval-result pre { max-height: 300px; margin: 9px 0 0; padding: 10px; overflow: auto; border-radius: 7px; background: #1b1b1b; color: #bbb; font: 11px/1.6 inherit; white-space: pre-wrap; }
+.eval-markdown-panel { display: grid; gap: 7px; margin-top: 9px; padding: 10px; border-radius: 7px; background: #1b1b1b; }
+.eval-markdown-panel > strong { color: #8faaa4; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+.eval-markdown-panel .markdown-body { color: #bbb; font-size: 11px; line-height: 1.65; }
+.eval-markdown-panel .markdown-body :deep(:first-child) { margin-top: 0; }
+.eval-markdown-panel .markdown-body :deep(:last-child) { margin-bottom: 0; }
+.eval-output-markdown { max-height: 420px; overflow: auto; }
 .eval-result__error { margin: 0 13px 8px; color: #e89c9c; font-size: 10px; }
 .judge-result { display: grid; gap: 7px; margin-top: 9px; padding: 10px; border: 1px solid #3a4643; border-radius: 8px; background: #202a28; }
 .judge-result header { display: flex; justify-content: space-between; }
@@ -447,7 +462,6 @@ onMounted(async () => {
 .judge-result header span { color: #8fcaba; font-size: 11px; font-weight: 700; }
 .judge-result > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
 .judge-result > div span { color: #999; font-size: 9px; }
-.judge-result p { margin: 0; color: #aaa; font-size: 10px; line-height: 1.5; }
 .eval-dialog-backdrop { position: fixed; z-index: 30; display: grid; padding: 24px; background: rgb(0 0 0 / 62%); inset: 0; place-items: center; }
 .eval-case-dialog { width: min(900px, 96vw); max-height: 92vh; padding: 16px; overflow-y: auto; border: 1px solid #444; border-radius: 13px; background: #262626; box-shadow: 0 20px 70px rgb(0 0 0 / 45%); }
 .eval-case-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 13px; padding-bottom: 11px; border-bottom: 1px solid #3c3c3c; }
