@@ -3,7 +3,29 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.model.agent_eval import AgentEvalResult, AgentEvalRun
+from app.model.agent_eval import AgentEvalCase, AgentEvalResult, AgentEvalRun
+
+
+async def create_eval_case(session: AsyncSession, definition: dict) -> AgentEvalCase:
+    case = AgentEvalCase(definition=definition)
+    session.add(case)
+    await session.flush()
+    return case
+
+
+async def list_eval_cases(session: AsyncSession) -> list[AgentEvalCase]:
+    statement = select(AgentEvalCase).order_by(AgentEvalCase.created_at)
+    return list(await session.scalars(statement))
+
+
+async def get_eval_case(
+    session: AsyncSession, case_id: UUID
+) -> AgentEvalCase | None:
+    return await session.get(AgentEvalCase, case_id)
+
+
+async def delete_eval_case(session: AsyncSession, case: AgentEvalCase) -> None:
+    await session.delete(case)
 
 
 async def create_eval_run(

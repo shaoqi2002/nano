@@ -1,0 +1,120 @@
+{
+  "version": "golden-v2",
+  "description": "Nano Agent 完整回归集，覆盖基础回答、指令遵循、Markdown、工具路由、来源质量与 multi-agent 工作流。",
+  "cases": [
+    {
+      "id": "rag-definition",
+      "title": "RAG 概念解释",
+      "prompt": "用两句话解释什么是 RAG，回答中必须包含“检索”和“生成”。",
+      "mode": "chat",
+      "required_terms": ["检索", "生成"],
+      "min_chars": 30,
+      "pass_threshold": 0.8,
+      "judge_rubric": "定义必须区分检索阶段与生成阶段，并保持两句话。"
+    },
+    {
+      "id": "exact-calculation",
+      "title": "确定性计算",
+      "prompt": "计算 17 × 23，并明确给出结果。",
+      "mode": "chat",
+      "required_terms": ["391"],
+      "min_chars": 3,
+      "pass_threshold": 1.0,
+      "judge_rubric": "计算结果必须准确，不得给出相互矛盾的数字。"
+    },
+    {
+      "id": "uncertainty-boundary",
+      "title": "不确定性边界",
+      "prompt": "如果没有可靠资料，2029 年 Nano Agent 获得了什么国际奖项？不要编造事实。",
+      "mode": "chat",
+      "required_terms": ["无法确认"],
+      "forbidden_terms": ["确定获得"],
+      "min_chars": 20,
+      "pass_threshold": 1.0,
+      "judge_rubric": "必须明确表达无法验证，不得虚构奖项、组织或来源。"
+    },
+    {
+      "id": "markdown-structure",
+      "title": "Markdown 结构化输出",
+      "prompt": "用 Markdown 输出一个包含二级标题、三项无序列表和一段总结的 Agent 安全检查清单。",
+      "mode": "chat",
+      "required_terms": ["##", "-"],
+      "min_chars": 100,
+      "pass_threshold": 0.8,
+      "judge_rubric": "输出应为有效 Markdown，包含二级标题、恰当的列表以及总结段落。"
+    },
+    {
+      "id": "concise-instruction",
+      "title": "格式与边界遵循",
+      "prompt": "只用三个要点说明 Agent 工具白名单的价值，不要添加开场白。",
+      "mode": "chat",
+      "forbidden_terms": ["当然", "下面"],
+      "min_chars": 30,
+      "pass_threshold": 0.8,
+      "judge_rubric": "必须正好给出三个要点、没有开场白，并准确说明最小权限价值。"
+    },
+    {
+      "id": "web-search-routing",
+      "title": "联网搜索路由",
+      "prompt": "搜索今天的一条人工智能行业新闻，给出事件日期和来源链接。",
+      "mode": "chat",
+      "expected_tools": ["web_search"],
+      "min_chars": 80,
+      "max_duration_ms": 120000,
+      "pass_threshold": 0.8,
+      "judge_rubric": "新闻应当是近期真实事件，日期和链接必须与结论一致。"
+    },
+    {
+      "id": "web-source-verification",
+      "title": "网页来源交叉验证",
+      "prompt": "搜索并读取至少一个可靠网页，解释 LangGraph checkpoint 的用途并附来源链接。",
+      "mode": "chat",
+      "expected_tools": ["web_search", "web_extract"],
+      "required_terms": ["checkpoint"],
+      "min_chars": 120,
+      "max_duration_ms": 180000,
+      "pass_threshold": 0.75,
+      "judge_rubric": "解释必须得到已读取网页支持，来源应优先使用官方文档。"
+    },
+    {
+      "id": "research-workflow",
+      "title": "深度研究完整工作流",
+      "prompt": "深入研究 RAG 与长上下文方案的优缺点，给出适用场景和有来源的结论。",
+      "mode": "research",
+      "expected_nodes": ["planner", "writer", "reviewer"],
+      "expected_roles": ["supervisor"],
+      "expected_events": ["plan.ready", "agent.delegated", "agent.completed", "review.completed"],
+      "min_chars": 300,
+      "max_duration_ms": 240000,
+      "pass_threshold": 0.75,
+      "judge_rubric": "必须比较两种方案、给出不同场景的选型结论，并保留支持关键结论的来源。"
+    },
+    {
+      "id": "multi-agent-delegation",
+      "title": "Supervisor 多任务分派",
+      "prompt": "深入研究 LangGraph、CrewAI 和 AutoGen 的编排方式，分别分析后给出选型矩阵和来源。",
+      "mode": "research",
+      "expected_nodes": ["planner", "writer", "reviewer"],
+      "expected_roles": ["supervisor"],
+      "expected_events": ["agent.delegated", "agent.completed"],
+      "required_terms": ["LangGraph", "CrewAI", "AutoGen"],
+      "min_chars": 500,
+      "max_duration_ms": 300000,
+      "pass_threshold": 0.75,
+      "judge_rubric": "三个框架都必须有独立证据分析，最终矩阵应给出清晰、可操作的选型建议。"
+    },
+    {
+      "id": "grounded-research-report",
+      "title": "研究报告依据性",
+      "prompt": "深入研究 AI Agent 中人工审批机制的价值、风险和实现模式，输出带链接的 Markdown 报告。",
+      "mode": "research",
+      "expected_nodes": ["planner", "writer", "reviewer"],
+      "expected_events": ["review.completed"],
+      "required_terms": ["http", "##"],
+      "min_chars": 400,
+      "max_duration_ms": 300000,
+      "pass_threshold": 0.75,
+      "judge_rubric": "报告应区分事实与建议，关键风险和实现模式必须有可追溯链接支持，并使用清晰 Markdown 结构。"
+    }
+  ]
+}

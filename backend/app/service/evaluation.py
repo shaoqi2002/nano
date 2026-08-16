@@ -46,6 +46,7 @@ async def stream_eval_run(
                 "judge_enabled": judge_enabled,
                 "judge_model": EVAL_JUDGE_MODEL if judge_enabled else None,
                 "judge_weight": judge_weight,
+                "case_snapshots": [case.model_dump() for case in cases],
             },
         )
         run.status = "running"

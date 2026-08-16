@@ -5,14 +5,23 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
-from app.eval.dataset import load_golden_dataset
-from app.repository.agent_eval import get_eval_run, list_eval_results, list_eval_runs
+from app.eval.dataset import EVAL_FORM_OPTIONS, EvalCase, load_golden_dataset
+from app.repository.agent_eval import (
+    create_eval_case,
+    delete_eval_case,
+    get_eval_case,
+    get_eval_run,
+    list_eval_cases,
+    list_eval_results,
+    list_eval_runs,
+)
 from app.schema.evaluation import (
+    EvalCaseDefinition,
     EvalCaseResponse,
     EvalDatasetResponse,
     EvalResultResponse,
@@ -33,14 +42,68 @@ def _sse(event: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _custom_case_id(case_id: UUID) -> str:
+    return f"custom:{case_id}"
+
+
+def _case_response(
+    case: EvalCase, *, source: str = "builtin"
+) -> EvalCaseResponse:
+    return EvalCaseResponse(
+        **case.model_dump(), source=source, editable=source == "custom"
+    )
+
+
+def _stored_case(case) -> EvalCase:
+    return EvalCase(id=_custom_case_id(case.id), **case.definition)
+
+
 @router.get("/dataset", response_model=EvalDatasetResponse)
-async def read_eval_dataset() -> EvalDatasetResponse:
+async def read_eval_dataset(session: SessionDependency) -> EvalDatasetResponse:
     dataset = load_golden_dataset()
+    custom_cases = [_stored_case(case) for case in await list_eval_cases(session)]
     return EvalDatasetResponse(
         version=dataset.version,
         description=dataset.description,
-        cases=[EvalCaseResponse.model_validate(case.model_dump()) for case in dataset.cases],
+        cases=[_case_response(case) for case in dataset.cases]
+        + [_case_response(case, source="custom") for case in custom_cases],
+        form_options=EVAL_FORM_OPTIONS,
     )
+
+
+@router.post(
+    "/cases", response_model=EvalCaseResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_custom_eval_case(
+    body: EvalCaseDefinition, session: SessionDependency
+) -> EvalCaseResponse:
+    async with session.begin():
+        case = await create_eval_case(session, body.model_dump())
+    return _case_response(_stored_case(case), source="custom")
+
+
+@router.put("/cases/{case_id}", response_model=EvalCaseResponse)
+async def update_custom_eval_case(
+    case_id: UUID, body: EvalCaseDefinition, session: SessionDependency
+) -> EvalCaseResponse:
+    async with session.begin():
+        case = await get_eval_case(session, case_id)
+        if case is None:
+            raise HTTPException(status_code=404, detail="Eval case not found")
+        case.definition = body.model_dump()
+    return _case_response(_stored_case(case), source="custom")
+
+
+@router.delete("/cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_custom_eval_case(
+    case_id: UUID, session: SessionDependency
+) -> Response:
+    async with session.begin():
+        case = await get_eval_case(session, case_id)
+        if case is None:
+            raise HTTPException(status_code=404, detail="Eval case not found")
+        await delete_eval_case(session, case)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/runs", response_model=list[EvalRunResponse])
@@ -79,6 +142,9 @@ async def create_eval_run_stream(
 ) -> StreamingResponse:
     dataset = load_golden_dataset()
     by_id = {case.id: case for case in dataset.cases}
+    for stored in await list_eval_cases(session):
+        custom = _stored_case(stored)
+        by_id[custom.id] = custom
     selected_ids = body.case_ids or list(by_id)
     unknown = [case_id for case_id in selected_ids if case_id not in by_id]
     if unknown:

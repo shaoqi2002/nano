@@ -6,6 +6,23 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+EVAL_FORM_OPTIONS = {
+    "modes": ["chat", "research"],
+    "tools": ["document_search", "web_search", "web_extract", "deep_research"],
+    "nodes": [
+        "agent", "tools", "finalize", "planner", "writer", "reviewer", "revise",
+    ],
+    "roles": [
+        "supervisor", "web_researcher", "document_analyst",
+        "general_researcher", "writer", "reviewer",
+    ],
+    "events": [
+        "plan.ready", "agent.delegated", "agent.retrying", "agent.completed",
+        "agent.failed", "review.completed", "tool.started", "tool.completed",
+    ],
+}
+
+
 class EvalCase(BaseModel):
     id: str
     title: str
@@ -15,6 +32,8 @@ class EvalCase(BaseModel):
     forbidden_terms: list[str] = Field(default_factory=list)
     expected_tools: list[str] = Field(default_factory=list)
     expected_nodes: list[str] = Field(default_factory=list)
+    expected_roles: list[str] = Field(default_factory=list)
+    expected_events: list[str] = Field(default_factory=list)
     min_chars: int = 1
     max_duration_ms: int | None = None
     pass_threshold: float = Field(default=0.8, ge=0, le=1)
@@ -29,7 +48,7 @@ class EvalDataset(BaseModel):
 
 @lru_cache(maxsize=1)
 def load_golden_dataset() -> EvalDataset:
-    path = Path(__file__).parent / "datasets" / "golden_v1.json"
+    path = Path(__file__).parent / "datasets" / "golden_v2.json"
     return EvalDataset.model_validate_json(path.read_text(encoding="utf-8"))
 
 

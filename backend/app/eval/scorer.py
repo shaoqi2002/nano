@@ -28,6 +28,15 @@ def score_agent_output(
         for event in events
         if event.get("type") == "node.completed" and event.get("node")
     }
+    roles = {
+        str(role)
+        for event in events
+        for role in (
+            event.get("agent"), event.get("from_agent"), event.get("to_agent")
+        )
+        if role
+    }
+    event_types = {str(event.get("type")) for event in events if event.get("type")}
     checks: dict[str, bool] = {
         "completed": bool(answer.strip()),
         "min_chars": len(answer.strip()) >= case.min_chars,
@@ -40,6 +49,10 @@ def score_agent_output(
         checks[f"tool:{tool}"] = tool in tools
     for node in case.expected_nodes:
         checks[f"node:{node}"] = node in nodes
+    for role in case.expected_roles:
+        checks[f"role:{role}"] = role in roles
+    for event_type in case.expected_events:
+        checks[f"event:{event_type}"] = event_type in event_types
     if case.max_duration_ms is not None:
         checks["within_latency_budget"] = duration_ms <= case.max_duration_ms
 
@@ -50,6 +63,8 @@ def score_agent_output(
         "duration_ms": duration_ms,
         "tools": sorted(tools),
         "nodes": sorted(nodes),
+        "roles": sorted(roles),
+        "events": sorted(event_types),
     }
     return EvalScore(
         passed=score >= case.pass_threshold,

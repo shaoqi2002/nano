@@ -1,7 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.eval.dataset import EVAL_FORM_OPTIONS
 
 
 class EvalRunRequest(BaseModel):
@@ -10,19 +12,62 @@ class EvalRunRequest(BaseModel):
     judge_weight: float = Field(default=0.5, ge=0, le=1)
 
 
-class EvalCaseResponse(BaseModel):
+class EvalCaseDefinition(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(min_length=1, max_length=10_000)
+    mode: Literal["chat", "research"] = "chat"
+    required_terms: list[str] = Field(default_factory=list, max_length=20)
+    forbidden_terms: list[str] = Field(default_factory=list, max_length=20)
+    expected_tools: list[str] = Field(default_factory=list, max_length=10)
+    expected_nodes: list[str] = Field(default_factory=list, max_length=20)
+    expected_roles: list[str] = Field(default_factory=list, max_length=20)
+    expected_events: list[str] = Field(default_factory=list, max_length=20)
+    min_chars: int = Field(default=1, ge=0, le=100_000)
+    max_duration_ms: int | None = Field(default=None, ge=1000, le=900_000)
+    pass_threshold: float = Field(default=0.8, ge=0, le=1)
+    judge_rubric: str = Field(
+        default="回答应准确、完整、有依据，并遵循用户的格式和边界要求。",
+        min_length=1,
+        max_length=3000,
+    )
+
+    @field_validator(
+        "required_terms",
+        "forbidden_terms",
+        "expected_tools",
+        "expected_nodes",
+        "expected_roles",
+        "expected_events",
+    )
+    @classmethod
+    def validate_list_fields(cls, values: list[str], info) -> list[str]:
+        normalized = list(dict.fromkeys(item.strip() for item in values if item.strip()))
+        if any(len(item) > 120 for item in normalized):
+            raise ValueError("List values must not exceed 120 characters")
+        option_key = {
+            "expected_tools": "tools",
+            "expected_nodes": "nodes",
+            "expected_roles": "roles",
+            "expected_events": "events",
+        }.get(info.field_name)
+        if option_key:
+            unknown = set(normalized) - set(EVAL_FORM_OPTIONS[option_key])
+            if unknown:
+                raise ValueError(f"Unsupported selections: {sorted(unknown)}")
+        return normalized
+
+
+class EvalCaseResponse(EvalCaseDefinition):
     id: str
-    title: str
-    prompt: str
-    mode: str
-    expected_tools: list[str]
-    expected_nodes: list[str]
+    source: Literal["builtin", "custom"] = "builtin"
+    editable: bool = False
 
 
 class EvalDatasetResponse(BaseModel):
     version: str
     description: str
     cases: list[EvalCaseResponse]
+    form_options: dict[str, list[str]]
 
 
 class EvalResultResponse(BaseModel):

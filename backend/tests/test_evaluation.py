@@ -4,7 +4,7 @@ from langchain_deepseek import ChatDeepSeek
 from pydantic import SecretStr
 
 from app.agent.structured import model_for_structured_output
-from app.eval.dataset import EvalCase, load_golden_dataset
+from app.eval.dataset import EVAL_FORM_OPTIONS, EvalCase, load_golden_dataset
 from app.eval.scorer import score_agent_output
 from app.eval.judge import JudgeVerdict, combine_with_judge
 
@@ -29,8 +29,8 @@ class EvaluationTests(unittest.TestCase):
         dataset = load_golden_dataset()
         ids = [case.id for case in dataset.cases]
 
-        self.assertEqual(dataset.version, "golden-v1")
-        self.assertGreaterEqual(len(ids), 5)
+        self.assertEqual(dataset.version, "golden-v2")
+        self.assertGreaterEqual(len(ids), 10)
         self.assertEqual(len(ids), len(set(ids)))
         self.assertTrue(any(case.mode == "research" for case in dataset.cases))
 
@@ -43,12 +43,15 @@ class EvaluationTests(unittest.TestCase):
             forbidden_terms=["guess"],
             expected_tools=["web_search"],
             expected_nodes=["reviewer"],
+            expected_roles=["reviewer"],
+            expected_events=["review.completed"],
             min_chars=10,
             max_duration_ms=1000,
         )
         events = [
             {"type": "tool.started", "name": "web_search"},
             {"type": "node.completed", "node": "reviewer"},
+            {"type": "review.completed", "agent": "reviewer"},
         ]
 
         score = score_agent_output(
@@ -58,6 +61,11 @@ class EvaluationTests(unittest.TestCase):
         self.assertTrue(score.passed)
         self.assertEqual(score.score, 1.0)
         self.assertTrue(all(score.metrics["checks"].values()))
+
+    def test_form_options_cover_multi_agent_expectations(self) -> None:
+        self.assertIn("web_search", EVAL_FORM_OPTIONS["tools"])
+        self.assertIn("reviewer", EVAL_FORM_OPTIONS["roles"])
+        self.assertIn("agent.delegated", EVAL_FORM_OPTIONS["events"])
 
     def test_scorer_reports_failed_expectations(self) -> None:
         case = EvalCase(

@@ -35,6 +35,8 @@ def judge_expectations(case: EvalCase) -> dict[str, Any]:
         "forbidden_terms": case.forbidden_terms,
         "expected_tools": case.expected_tools,
         "expected_nodes": case.expected_nodes,
+        "expected_roles": case.expected_roles,
+        "expected_events": case.expected_events,
         "minimum_characters": case.min_chars,
     }
 
