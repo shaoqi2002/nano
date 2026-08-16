@@ -7,9 +7,19 @@ from app.agent.structured import model_for_structured_output
 from app.eval.dataset import EVAL_FORM_OPTIONS, EvalCase, load_golden_dataset
 from app.eval.scorer import score_agent_output
 from app.eval.judge import JudgeVerdict, combine_with_judge
+from app.schema.evaluation import EvalCaseDefinition
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_custom_case_schema_accepts_supported_agent_modes(self) -> None:
+        case = EvalCaseDefinition(
+            title="Custom research case",
+            prompt="Research this topic",
+            mode="research",
+        )
+
+        self.assertEqual(case.mode, "research")
+
     def test_structured_output_disables_thinking_without_mutating_model(self) -> None:
         model = ChatDeepSeek(
             model="deepseek-v4-flash",
