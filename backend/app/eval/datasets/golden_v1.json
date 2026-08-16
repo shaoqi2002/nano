@@ -1,0 +1,49 @@
+{
+  "version": "golden-v1",
+  "description": "Nano Agent 基础能力回归集，覆盖指令遵循、计算、联网工具和研究工作流。",
+  "cases": [
+    {
+      "id": "rag-definition",
+      "title": "RAG 概念解释",
+      "prompt": "用两句话解释什么是 RAG，回答中必须包含“检索”和“生成”。",
+      "mode": "chat",
+      "required_terms": ["检索", "生成"],
+      "min_chars": 30
+    },
+    {
+      "id": "exact-calculation",
+      "title": "确定性计算",
+      "prompt": "计算 17 × 23，并明确给出结果。",
+      "mode": "chat",
+      "required_terms": ["391"],
+      "min_chars": 3
+    },
+    {
+      "id": "uncertainty-boundary",
+      "title": "不确定性边界",
+      "prompt": "如果没有可靠资料，2029 年 Nano Agent 获得了什么国际奖项？不要编造事实。",
+      "mode": "chat",
+      "required_terms": ["无法确认"],
+      "forbidden_terms": ["确定获得"],
+      "min_chars": 20
+    },
+    {
+      "id": "web-search-routing",
+      "title": "联网工具路由",
+      "prompt": "搜索今天的一个人工智能行业新闻并附上来源链接。",
+      "mode": "chat",
+      "expected_tools": ["web_search"],
+      "min_chars": 80,
+      "max_duration_ms": 120000
+    },
+    {
+      "id": "research-workflow",
+      "title": "深度研究工作流",
+      "prompt": "深入研究 RAG 与长上下文方案的优缺点，给出适用场景和有来源的结论。",
+      "mode": "research",
+      "expected_nodes": ["planner", "writer", "reviewer"],
+      "min_chars": 300,
+      "max_duration_ms": 240000
+    }
+  ]
+}

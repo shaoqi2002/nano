@@ -5,6 +5,7 @@ import {
   consumeEventStream,
   documentContentUrl,
   getAgentRunEvents,
+  getEvalDataset,
   sendMessage,
   uploadDocument,
 } from "../src/api.js";
@@ -16,6 +17,27 @@ test("builds inline and download document URLs", () => {
     documentContentUrl("doc-1", true),
     "/api/documents/doc-1/content?download=true",
   );
+});
+
+test("loads the versioned eval dataset", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl;
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ version: "golden-v1", cases: [] }),
+    };
+  };
+
+  try {
+    const dataset = await getEvalDataset();
+    assert.equal(dataset.version, "golden-v1");
+    assert.equal(requestedUrl, "/api/evals/dataset");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("loads persisted agent trace events", async () => {

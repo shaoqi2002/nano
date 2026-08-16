@@ -12,6 +12,7 @@ import {
   sendMessageStream,
 } from "./api";
 import DocumentsView from "./DocumentsView.vue";
+import EvaluationsView from "./EvaluationsView.vue";
 import { renderMarkdown } from "./markdown";
 
 
@@ -173,6 +174,11 @@ async function openConversation(id) {
 function openDocuments() {
   documentTarget.value = { id: null, page: null };
   activeView.value = "documents";
+  sidebarOpen.value = false;
+}
+
+function openEvaluations() {
+  activeView.value = "evaluations";
   sidebarOpen.value = false;
 }
 
@@ -560,6 +566,15 @@ onMounted(async () => {
         文档库
       </button>
 
+      <button
+        class="new-chat-button documents-button"
+        :class="{ 'documents-button--active': activeView === 'evaluations' }"
+        @click="openEvaluations"
+      >
+        <span class="new-chat-button__icon">✓</span>
+        Agent Eval
+      </button>
+
       <div class="history-label">最近对话</div>
       <nav class="conversation-list" aria-label="历史对话">
         <div
@@ -764,10 +779,18 @@ onMounted(async () => {
     </main>
 
     <DocumentsView
-      v-else
+      v-else-if="activeView === 'documents'"
       :initial-document-id="documentTarget.id"
       :initial-page="documentTarget.page"
       @back="activeView = 'chat'"
+    />
+
+    <EvaluationsView
+      v-else
+      :api-key="apiKey"
+      :tavily-api-key="tavilyApiKey"
+      @back="activeView = 'chat'"
+      @configure-keys="openApiKeyDialog"
     />
 
     <div v-if="apiKeyDialogOpen" class="dialog-backdrop" @click.self="apiKeyDialogOpen = false">

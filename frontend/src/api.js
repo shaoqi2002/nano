@@ -116,6 +116,37 @@ export function getAgentRunEvents(runId) {
   return request(`/agent-runs/${runId}/events`);
 }
 
+export function getEvalDataset() {
+  return request("/evals/dataset");
+}
+
+export function listEvalRuns() {
+  return request("/evals/runs");
+}
+
+export function getEvalRun(runId) {
+  return request(`/evals/runs/${runId}`);
+}
+
+export async function runEvalStream(caseIds, apiKey, tavilyApiKey, onEvent, signal) {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-DeepSeek-API-Key": apiKey,
+  };
+  if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
+  const response = await fetch(`${API_BASE_URL}/evals/runs/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ case_ids: caseIds }),
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || `请求失败（${response.status}）`);
+  }
+  await consumeEventStream(response, onEvent);
+}
+
 export async function resumeAgentRunStream(runId, apiKey, tavilyApiKey, onEvent, signal) {
   const headers = { "X-DeepSeek-API-Key": apiKey };
   if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
