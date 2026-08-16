@@ -612,8 +612,8 @@ button {
 
 .agent-steps {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   margin-bottom: 12px;
 }
@@ -658,8 +658,10 @@ button {
 
 .agent-step {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 7px;
+  max-width: 100%;
   min-height: 25px;
   padding: 4px 9px;
   border: 1px solid #3d3d3d;
@@ -667,6 +669,7 @@ button {
   background: #282828;
   color: #aaa;
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .agent-step__status {
