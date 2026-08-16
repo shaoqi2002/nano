@@ -62,6 +62,48 @@ class FakeGraphModel:
             yield AIMessage(content="research evidence")
 
 
+class FlakyResearchModel(FakeGraphModel):
+    def __init__(self):
+        super().__init__()
+        self.research_attempts = 0
+
+    async def astream(self, _messages):
+        self.research_attempts += 1
+        if self.research_attempts == 1:
+            raise RuntimeError("temporary search failure")
+        yield AIMessage(content="recovered evidence")
+
+
+class RevisionStructuredModel:
+    def __init__(self, parent, schema):
+        self.parent = parent
+        self.schema = schema
+
+    async def ainvoke(self, _messages):
+        if self.schema is ResearchPlan:
+            return ResearchPlan(
+                objective="Review the evidence",
+                tasks=[ResearchTask(id="only", question="Find evidence")],
+                expected_output="A reviewed answer",
+            )
+        self.parent.review_count += 1
+        return ReviewResult(
+            passed=self.parent.review_count > 1,
+            revision_instructions=(
+                [] if self.parent.review_count > 1 else ["Clarify the conclusion"]
+            ),
+        )
+
+
+class RevisionModel(FakeGraphModel):
+    def __init__(self):
+        super().__init__()
+        self.review_count = 0
+
+    def with_structured_output(self, schema):
+        return RevisionStructuredModel(self, schema)
+
+
 def state(run_id: str = "run-1"):
     return initial_agent_state(
         run_id=run_id,
@@ -132,6 +174,38 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(event["type"] == "review.completed" for event in events))
         snapshot = await graph.aget_state(config)
         self.assertEqual(snapshot.values["final_answer"], "final research report")
+
+    async def test_researcher_retries_without_failing_the_graph(self) -> None:
+        model = FlakyResearchModel()
+        graph = build_agent_graph(model, [], "research", InMemorySaver())
+        config = {"configurable": {"thread_id": "retry-1"}}
+        events = [
+            event
+            async for event in graph.astream(
+                state("retry-1"), config=config, stream_mode="custom"
+            )
+        ]
+
+        self.assertTrue(any(event["type"] == "agent.retrying" for event in events))
+        self.assertTrue(any(event["type"] == "agent.completed" for event in events))
+        snapshot = await graph.aget_state(config)
+        self.assertEqual(snapshot.values["status"], "completed")
+
+    async def test_revision_is_reviewed_again_before_finish(self) -> None:
+        model = RevisionModel()
+        graph = build_agent_graph(model, [], "research", InMemorySaver())
+        config = {"configurable": {"thread_id": "revision-1"}}
+        events = [
+            event
+            async for event in graph.astream(
+                state("revision-1"), config=config, stream_mode="custom"
+            )
+        ]
+
+        reviews = [event for event in events if event["type"] == "review.completed"]
+        self.assertEqual(len(reviews), 2)
+        snapshot = await graph.aget_state(config)
+        self.assertEqual(snapshot.values["revision_count"], 1)
 
     def test_auto_mode_is_predictable(self) -> None:
         self.assertEqual(resolve_agent_mode("auto", "请深入研究这个项目"), "research")

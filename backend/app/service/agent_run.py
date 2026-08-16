@@ -49,6 +49,10 @@ TRACE_EVENT_TYPES = {
     "tool.failed",
     "plan.ready",
     "review.completed",
+    "agent.delegated",
+    "agent.retrying",
+    "agent.completed",
+    "agent.failed",
     "message.completed",
 }
 SENSITIVE_FIELDS = {"api_key", "apikey", "authorization", "secret", "token"}
@@ -122,6 +126,7 @@ def _step_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "node": str(event.get("node") or "unknown"),
         "label": str(event.get("label") or event.get("node") or "Agent"),
+        **({"agent": str(event["agent"])} if event.get("agent") else {}),
         "status": (
             "running"
             if event_type == "node.started"

@@ -10,7 +10,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from app.agent.state import AgentState, ResearchPlan, ReviewResult, SpecialistRole
-from app.core.config import AGENT_MAX_TOOL_CALLS, AGENT_MAX_TOOL_ROUNDS
+from app.core.config import (
+    AGENT_MAX_RESEARCH_RETRIES,
+    AGENT_MAX_REVISIONS,
+    AGENT_MAX_TOOL_CALLS,
+    AGENT_MAX_TOOL_ROUNDS,
+)
 
 
 RESEARCH_HINTS = (
@@ -299,6 +304,14 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
                 "expected_output": "带来源的研究报告",
             }
         writer({"type": "plan.ready", "plan": payload})
+        for task in tasks:
+            writer({
+                "type": "agent.delegated",
+                "from_agent": "supervisor",
+                "to_agent": task.get("agent", "general_researcher"),
+                "task_id": task.get("id"),
+                "question": task.get("question"),
+            })
         writer({"type": "node.completed", "node": "planner", "label": "制定研究计划"})
         return {"plan": tasks}
 
@@ -341,22 +354,59 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
             )),
         ]
         answer = ""
-        final: AIMessage | None = None
-        async for event in invoke_model_with_tools_stream(
-            model, assigned_tools, messages
-        ):
-            if event["type"] == "_model.response":
-                final = event["response"]
-            elif event["type"].startswith("tool."):
-                writer(event)
-        if final is not None:
-            answer = _text(final)
-        writer({"type": "node.completed", "node": task_id, "label": label})
-        return {"research_results": [{
+        error_message: str | None = None
+        attempts = 0
+        for attempt in range(max(AGENT_MAX_RESEARCH_RETRIES, 0) + 1):
+            attempts = attempt + 1
+            final: AIMessage | None = None
+            try:
+                async for event in invoke_model_with_tools_stream(
+                    model, assigned_tools, messages
+                ):
+                    if event["type"] == "_model.response":
+                        final = event["response"]
+                    elif event["type"].startswith("tool."):
+                        writer(event)
+                answer = _text(final) if final is not None else ""
+                if not answer:
+                    raise RuntimeError("specialist returned no evidence")
+                error_message = None
+                break
+            except Exception as error:
+                error_message = str(error)[:1000]
+                if attempt < max(AGENT_MAX_RESEARCH_RETRIES, 0):
+                    writer({
+                        "type": "agent.retrying",
+                        "agent": role,
+                        "task_id": task_id,
+                        "attempt": attempts + 1,
+                        "message": error_message,
+                    })
+        succeeded = error_message is None
+        result = {
             "task_id": task_id,
             "question": label,
             "agent": role,
             "evidence": answer,
+            "succeeded": succeeded,
+            "attempts": attempts,
+            **({"error": error_message} if error_message else {}),
+        }
+        writer({
+            "type": "agent.completed" if succeeded else "agent.failed",
+            "agent": role,
+            "task_id": task_id,
+            "attempts": attempts,
+            **({"message": error_message} if error_message else {}),
+        })
+        writer({
+            "type": "node.completed" if succeeded else "node.failed",
+            "node": task_id,
+            "label": label,
+            "agent": role,
+        })
+        return {"research_results": [{
+            **result,
         }]}
 
     async def synthesize(state: AgentState) -> AgentState:
@@ -404,7 +454,12 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
 
     def route_review(state: AgentState) -> str:
         review = state.get("review", {})
-        return "finish" if review.get("passed", True) or state.get("revision_count", 0) >= 1 else "revise"
+        return (
+            "finish"
+            if review.get("passed", True)
+            or state.get("revision_count", 0) >= max(AGENT_MAX_REVISIONS, 0)
+            else "revise"
+        )
 
     async def revise(state: AgentState) -> AgentState:
         writer = get_stream_writer()
@@ -439,6 +494,6 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
     graph.add_edge("researcher", "synthesize")
     graph.add_edge("synthesize", "reviewer")
     graph.add_conditional_edges("reviewer", route_review)
-    graph.add_edge("revise", "finish")
+    graph.add_edge("revise", "reviewer")
     graph.add_edge("finish", END)
     return graph
