@@ -4,7 +4,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 
-from app.agent.graph import build_agent_graph, initial_agent_state, resolve_agent_mode
+from app.agent.graph import (
+    build_agent_graph,
+    initial_agent_state,
+    resolve_agent_mode,
+    select_specialist_tools,
+)
 from app.agent.state import ResearchPlan, ResearchTask, ReviewResult
 from app.service.agent_run import _safe_trace_value, _trace_payload
 
@@ -18,8 +23,17 @@ class StructuredModel:
             return ResearchPlan(
                 objective="Compare the evidence",
                 tasks=[
-                    ResearchTask(id="one", question="Find source one"),
-                    ResearchTask(id="two", question="Find source two"),
+                    ResearchTask(
+                        id="one",
+                        question="Find source one",
+                        agent="web_researcher",
+                        preferred_tools=["web_search"],
+                    ),
+                    ResearchTask(
+                        id="two",
+                        question="Analyze local evidence",
+                        agent="document_analyst",
+                    ),
                 ],
                 expected_output="A sourced report",
             )
@@ -111,6 +125,10 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
             if event["type"] == "node.started" and event["node"] in {"one", "two"}
         ]
         self.assertEqual(len(researcher_starts), 2)
+        self.assertEqual(
+            {event["agent"] for event in researcher_starts},
+            {"web_researcher", "document_analyst"},
+        )
         self.assertTrue(any(event["type"] == "review.completed" for event in events))
         snapshot = await graph.aget_state(config)
         self.assertEqual(snapshot.values["final_answer"], "final research report")
@@ -119,6 +137,33 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resolve_agent_mode("auto", "请深入研究这个项目"), "research")
         self.assertEqual(resolve_agent_mode("auto", "你好"), "chat")
         self.assertEqual(resolve_agent_mode("chat", "深入研究"), "chat")
+
+    def test_specialists_enforce_server_side_tool_allowlists(self) -> None:
+        @tool
+        def web_search(query: str) -> str:
+            """Search the web."""
+            return query
+
+        @tool
+        def web_extract(url: str) -> str:
+            """Extract a page."""
+            return url
+
+        @tool
+        def dangerous_tool(command: str) -> str:
+            """A tool no research specialist may use."""
+            return command
+
+        available = [web_search, web_extract, dangerous_tool]
+        selected = select_specialist_tools(
+            "web_researcher",
+            ["web_search", "dangerous_tool"],
+            available,
+        )
+        self.assertEqual([item.name for item in selected], ["web_search"])
+        self.assertEqual(
+            select_specialist_tools("document_analyst", [], available), []
+        )
 
     def test_trace_payload_redacts_secrets_and_drops_deltas(self) -> None:
         payload = _trace_payload({

@@ -1,14 +1,18 @@
 import operator
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
+SpecialistRole = Literal["web_researcher", "document_analyst", "general_researcher"]
+
+
 class ResearchTask(BaseModel):
     id: str
     question: str
+    agent: SpecialistRole = "general_researcher"
     preferred_tools: list[str] = Field(default_factory=list)
 
 
@@ -43,4 +47,3 @@ class AgentState(TypedDict, total=False):
     revision_count: int
     status: str
     error: str | None
-
