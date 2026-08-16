@@ -9,6 +9,7 @@ class SendMessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=10_000)
     use_rag: bool = True
     mode: Literal["auto", "chat", "research"] = "auto"
+    allow_write_tools: bool = False
 
 
 class RagSourceResponse(BaseModel):

@@ -190,6 +190,7 @@ async def stream_new_run(
     use_rag: bool,
     requested_mode: str,
     checkpointer: Any,
+    allow_write_tools: bool = False,
 ) -> AsyncIterator[dict[str, Any]]:
     run, history = await _prepare_run(
         session, conversation_id, content, requested_mode
@@ -247,6 +248,7 @@ async def stream_new_run(
         query=content,
         messages=messages,
         rag_sources=sources,
+        write_tools_allowed=allow_write_tools,
     )
     async for event in _stream_graph(
         session=session,

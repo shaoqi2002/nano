@@ -103,6 +103,7 @@ async def create_message(
             embedding_base_url=embedding_base_url,
             use_rag=request.use_rag,
             requested_mode=request.mode,
+            allow_write_tools=request.allow_write_tools,
             checkpointer=http_request.app.state.agent_checkpointer,
         )
         async for event in stream:
@@ -159,6 +160,7 @@ async def create_message_stream(
             embedding_base_url=embedding_base_url,
             use_rag=request.use_rag,
             requested_mode=request.mode,
+            allow_write_tools=request.allow_write_tools,
             checkpointer=http_request.app.state.agent_checkpointer,
         )
         pending: asyncio.Task | None = None

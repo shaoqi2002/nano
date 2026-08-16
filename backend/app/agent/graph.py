@@ -86,6 +86,7 @@ def initial_agent_state(
     messages: list[Any],
     rag_sources: list[dict[str, Any]],
     fault_injection: str = "none",
+    write_tools_allowed: bool = False,
 ) -> AgentState:
     return {
         "run_id": run_id,
@@ -99,6 +100,7 @@ def initial_agent_state(
         "revision_count": 0,
         "status": "running",
         "fault_injection": fault_injection,
+        "write_tools_allowed": write_tools_allowed,
     }
 
 
@@ -209,6 +211,7 @@ def _build_chat_graph(model: Any, tools: ToolRegistry | list[BaseTool]) -> State
             run_id=state["run_id"],
             conversation_id=state["conversation_id"],
             agent_role="chat_agent",
+            write_allowed=state.get("write_tools_allowed", False),
         )
         response = state["messages"][-1]
         if not isinstance(response, AIMessage):

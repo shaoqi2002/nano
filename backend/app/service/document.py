@@ -133,6 +133,61 @@ async def create_document(
             except DocumentCacheError:
                 logger.warning("Unable to remove failed upload cache", exc_info=True)
         raise
+
+
+async def create_document_from_path(
+    session: AsyncSession,
+    path: Path,
+    original_name: str | None = None,
+) -> Document:
+    """Persist a generated local artifact through the same document-library path."""
+    name = safe_filename(original_name or path.name)
+    preview_kind = preview_kind_for(name)
+    extension = PurePosixPath(name).suffix.lower()
+    content_type = ALLOWED_EXTENSIONS[extension][1]
+    size = path.stat().st_size
+    if size == 0:
+        raise InvalidDocumentError("不能保存空文件")
+    if size > DOCUMENT_MAX_BYTES:
+        raise InvalidDocumentError(
+            f"文件不能超过 {DOCUMENT_MAX_BYTES // (1024 * 1024)} MiB"
+        )
+    checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+    document_id = uuid4()
+    object_key = f"documents/{document_id}/original{extension}"
+    cached_path: Path | None = None
+    try:
+        with path.open("rb") as stream:
+            cached_path = await run_in_threadpool(
+                document_cache.store_stream,
+                object_key,
+                stream,
+                size,
+                checksum,
+            )
+    except DocumentCacheError:
+        logger.warning("Unable to cache generated document", exc_info=True)
+    await run_in_threadpool(upload_path, object_key, cached_path or path, content_type)
+    document = Document(
+        id=document_id,
+        original_name=name,
+        object_key=object_key,
+        content_type=content_type,
+        preview_kind=preview_kind,
+        size_bytes=size,
+        checksum_sha256=checksum,
+    )
+    try:
+        async with session.begin():
+            return await add_document(session, document)
+    except Exception:
+        await run_in_threadpool(delete_object, object_key)
+        if cached_path:
+            try:
+                await run_in_threadpool(document_cache.remove, object_key)
+            except DocumentCacheError:
+                logger.warning("Unable to remove generated document cache", exc_info=True)
+        raise
     document = Document(
         id=document_id,
         original_name=original_name,

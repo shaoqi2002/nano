@@ -7,7 +7,11 @@ class ToolsTests(unittest.TestCase):
     def test_no_tavily_key_disables_web_tools(self) -> None:
         self.assertEqual(
             [tool.name for tool in create_tools(None)],
-            ["local_system_status", "local_list_files", "local_read_text", "local_search_files"],
+            [
+                "local_system_status", "local_list_files", "local_read_text", "local_search_files",
+                "local_write_text", "local_move_file", "word_create_document",
+                "word_edit_document", "word_convert_to_pdf",
+            ],
         )
 
     def test_tavily_key_registers_search_extract_and_research(self) -> None:
@@ -16,6 +20,8 @@ class ToolsTests(unittest.TestCase):
             [registered.name for registered in tools],
             [
                 "local_system_status", "local_list_files", "local_read_text", "local_search_files",
+                "local_write_text", "local_move_file", "word_create_document",
+                "word_edit_document", "word_convert_to_pdf",
                 "web_search", "web_extract", "deep_research",
             ],
         )

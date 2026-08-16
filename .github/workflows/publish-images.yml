@@ -62,6 +62,8 @@ jobs:
         run: |
           curl --fail --show-error --retry 10 --retry-delay 2 http://127.0.0.1:8088/api/health
           curl --fail --show-error --retry 10 --retry-delay 2 http://127.0.0.1:8088/
+          docker compose -f compose.prod.yaml exec -T backend soffice --headless --version
+          docker compose -f compose.prod.yaml exec -T backend pdfinfo -v
 
       - name: Print container diagnostics
         if: failure()

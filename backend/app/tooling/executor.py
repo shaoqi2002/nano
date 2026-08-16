@@ -64,5 +64,5 @@ class ToolExecutor:
             except asyncio.CancelledError:
                 raise
             except Exception as error:
-                if attempts > spec.max_retries + 1:
+                if attempts >= spec.max_retries + 1:
                     raise ToolExecutionError(str(error)) from error

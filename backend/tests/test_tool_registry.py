@@ -80,6 +80,36 @@ class ToolRegistryTests(unittest.IsolatedAsyncioTestCase):
                 ToolContext(run_id="run", conversation_id="conversation"),
             )
 
+    async def test_write_tool_requires_explicit_request_authorization(self) -> None:
+        @tool
+        async def write_note(content: str) -> str:
+            """Write a note."""
+            return content
+
+        spec = ToolSpec(
+            name="write_note",
+            version="1.0.0",
+            tool=write_note,
+            category="test",
+            risk_level="write",
+            side_effect=True,
+        )
+        registry = ToolRegistry([spec])
+        with self.assertRaises(ToolExecutionError):
+            await registry.executor.execute(
+                spec,
+                {"content": "blocked"},
+                ToolContext(run_id="run", conversation_id="conversation"),
+            )
+        result = await registry.executor.execute(
+            spec,
+            {"content": "allowed"},
+            ToolContext(
+                run_id="run", conversation_id="conversation", write_allowed=True
+            ),
+        )
+        self.assertEqual(result.value, "allowed")
+
 
 if __name__ == "__main__":
     unittest.main()

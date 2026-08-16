@@ -48,3 +48,4 @@ class AgentState(TypedDict, total=False):
     status: str
     error: str | None
     fault_injection: Literal["none", "researcher_once", "researcher_always"]
+    write_tools_allowed: bool

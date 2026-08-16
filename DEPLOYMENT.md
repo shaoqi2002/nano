@@ -85,6 +85,19 @@ reached. Both the cache path and size limit can be changed in
 `.env.production`; the cache is disposable and Backblaze B2 remains the source
 of truth.
 
+## Local Agent workspace and Word/PDF tools
+
+`AGENT_WORKSPACE_PATH` is mounted read-write at `/data/agent-workspace`. File
+tools reject absolute paths and resolved paths outside that root. Keep this
+mount dedicated to Agent-managed files rather than pointing it at `/`, a home
+directory, or Docker's data directory.
+
+The backend image includes LibreOffice Writer, Poppler, and Noto CJK fonts.
+Generated or edited DOCX files are stored as new document-library objects;
+source documents are never overwritten. PDF conversion reopens the output and
+requires at least one valid page before it is uploaded. The UI's per-request
+write toggle is off by default and is enforced again by the backend policy.
+
 The current Nano application has no user account or document authorization
 layer. Keep port 8088 behind the LAN, Tailscale, or another authenticated
 reverse proxy. Anyone who can reach the application can otherwise upload,

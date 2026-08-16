@@ -65,6 +65,7 @@ const embeddingStatusError = ref("");
 let embeddingStatusRequestId = 0;
 const deletingConversationId = ref(null);
 const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
+const allowWriteTools = ref(false);
 const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
 const documentTarget = ref({ id: null, page: null });
 const streamController = ref(null);
@@ -537,6 +538,8 @@ async function submitMessage() {
   messages.value.push(optimisticMessage, streamingMessage);
   updateConversationTitle(content);
   draft.value = "";
+  const writeToolsAuthorized = allowWriteTools.value;
+  allowWriteTools.value = false;
   errorMessage.value = "";
   isSending.value = true;
   streamController.value = new AbortController();
@@ -553,6 +556,7 @@ async function submitMessage() {
       agentMode.value,
       embeddingApiKey.value,
       embeddingBaseUrl.value,
+      writeToolsAuthorized,
       (event) => handleStreamEvent(streamingMessage, event),
       streamController.value.signal,
     );
@@ -982,6 +986,13 @@ onMounted(async () => {
             :aria-pressed="useRag"
             @click="toggleRag"
           >文档 RAG {{ useRag ? "已开启" : "已关闭" }}</button>
+          <button
+            type="button"
+            class="rag-toggle"
+            :class="{ 'rag-toggle--active': allowWriteTools }"
+            :aria-pressed="allowWriteTools"
+            @click="allowWriteTools = !allowWriteTools"
+          >写工具 {{ allowWriteTools ? "已授权" : "未授权" }}</button>
           <p class="composer-hint">Enter 发送 · Shift + Enter 换行</p>
         </div>
       </footer>

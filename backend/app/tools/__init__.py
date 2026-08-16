@@ -4,6 +4,7 @@ from app.tools.deep_research import create_deep_research_tool
 from app.tools.webextract import create_web_extract_tool
 from app.tools.websearch import create_web_search_tool
 from app.tools.local_read import create_local_read_tools
+from app.tools.local_write import create_local_write_tools
 from app.tooling import ToolRegistry, ToolSpec
 
 
@@ -18,6 +19,19 @@ def create_tool_registry(tavily_api_key: str | None) -> ToolRegistry:
             timeout_seconds=10.0,
             allowed_agents=frozenset({"chat_agent"}),
             tags=frozenset({"local", "readonly"}),
+        ))
+    for tool in create_local_write_tools():
+        registry.register(ToolSpec(
+            name=tool.name,
+            version="1.0.0",
+            tool=tool,
+            category="documents" if tool.name.startswith("word_") else "local",
+            risk_level="write",
+            side_effect=True,
+            idempotent=False,
+            timeout_seconds=180.0 if tool.name.startswith("word_") else 10.0,
+            allowed_agents=frozenset({"chat_agent"}),
+            tags=frozenset({"local", "write"}),
         ))
     if not tavily_api_key or not tavily_api_key.strip():
         return registry
