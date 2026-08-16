@@ -58,6 +58,45 @@ class TavilyAccountTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(context.exception.status_code, 401)
 
+    async def test_accepts_nullable_and_numeric_string_usage(self) -> None:
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={
+                "key": {
+                    "usage": "12.0",
+                    "limit": "1000",
+                    "search_usage": None,
+                },
+                "account": {
+                    "current_plan": None,
+                    "plan_usage": "12",
+                    "plan_limit": None,
+                },
+            })
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as client:
+            usage = await fetch_tavily_usage(client, "tvly-test")
+
+        self.assertEqual(usage.key.usage, 12)
+        self.assertEqual(usage.key.search_usage, 0)
+        self.assertEqual(usage.account.current_plan, "Unknown")
+        self.assertEqual(usage.account.plan_limit, 0)
+
+    async def test_accepts_missing_account_breakdown(self) -> None:
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={
+                "key": {"usage": 12, "limit": 1000},
+            })
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as client:
+            usage = await fetch_tavily_usage(client, "tvly-test")
+
+        self.assertEqual(usage.account.current_plan, "Unknown")
+        self.assertEqual(usage.account.plan_limit, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

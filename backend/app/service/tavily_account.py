@@ -34,6 +34,11 @@ async def fetch_tavily_usage(
     if response.status_code != 200:
         raise TavilyUsageError(502, "Tavily 用量查询失败")
     try:
-        return TavilyUsageResponse.model_validate(response.json())
+        payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("key"), dict):
+            raise ValueError("Tavily usage response is missing key usage")
+        if not isinstance(payload.get("account"), dict):
+            payload["account"] = {}
+        return TavilyUsageResponse.model_validate(payload)
     except (ValueError, ValidationError) as error:
         raise TavilyUsageError(502, "Tavily 返回了无效的用量数据") from error
