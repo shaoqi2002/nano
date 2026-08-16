@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   consumeEventStream,
   documentContentUrl,
+  sendMessage,
   uploadDocument,
 } from "../src/api.js";
 
@@ -14,6 +15,30 @@ test("builds inline and download document URLs", () => {
     documentContentUrl("doc-1", true),
     "/api/documents/doc-1/content?download=true",
   );
+});
+
+test("sends the selected agent mode", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedOptions;
+  globalThis.fetch = async (_url, options) => {
+    capturedOptions = options;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    };
+  };
+
+  try {
+    await sendMessage("conversation-1", "research this", "sk-test", "", true, "research");
+    assert.deepEqual(JSON.parse(capturedOptions.body), {
+      message: "research this",
+      use_rag: true,
+      mode: "research",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("uploads documents as multipart data without a JSON content type", async () => {

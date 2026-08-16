@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class SendMessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=10_000)
     use_rag: bool = True
+    mode: Literal["auto", "chat", "research"] = "auto"
 
 
 class RagSourceResponse(BaseModel):
@@ -49,3 +50,20 @@ class SendMessageResponse(BaseModel):
 class ConversationMessagesResponse(BaseModel):
     conversation_id: UUID
     messages: list[MessageResponse]
+
+
+class AgentRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    conversation_id: UUID
+    mode: str
+    status: str
+    query: str
+    current_node: str | None
+    plan: list[dict] = Field(default_factory=list)
+    progress: list[dict] = Field(default_factory=list)
+    error: str | None
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None

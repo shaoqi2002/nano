@@ -2,6 +2,9 @@ fastapi
 uvicorn[standard]
 langchain
 langchain-deepseek
+langgraph>=1.0,<2.0
+langgraph-checkpoint-postgres>=3.0,<4.0
+psycopg[binary,pool]>=3.2,<4.0
 httpx>=0.27,<1.0
 python-dotenv
 sqlalchemy[asyncio]>=2.0,<3.0

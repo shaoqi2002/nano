@@ -5,7 +5,9 @@ import {
   createConversation,
   deleteConversation as deleteConversationRequest,
   getMessages,
+  getAgentRun,
   listConversations,
+  resumeAgentRunStream,
   sendMessageStream,
 } from "./api";
 import DocumentsView from "./DocumentsView.vue";
@@ -16,6 +18,8 @@ const ACTIVE_KEY = "nano-agent-active-conversation";
 const API_KEY_STORAGE_KEY = "nano-deepseek-api-key";
 const TAVILY_API_KEY_STORAGE_KEY = "nano-tavily-api-key";
 const RAG_STORAGE_KEY = "nano-rag-enabled";
+const AGENT_MODE_STORAGE_KEY = "nano-agent-mode";
+const ACTIVE_RUN_STORAGE_KEY = "nano-agent-active-run";
 
 const conversations = ref([]);
 const activeView = ref("chat");
@@ -35,8 +39,10 @@ const tavilyApiKeyDraft = ref("");
 const apiKeyDialogOpen = ref(false);
 const deletingConversationId = ref(null);
 const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
+const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
 const documentTarget = ref({ id: null, page: null });
 const streamController = ref(null);
+const resumableRun = ref(JSON.parse(localStorage.getItem(ACTIVE_RUN_STORAGE_KEY) || "null"));
 
 const activeConversation = computed(() =>
   conversations.value.find((item) => item.id === activeConversationId.value),
@@ -175,6 +181,11 @@ function toggleRag() {
   localStorage.setItem(RAG_STORAGE_KEY, String(useRag.value));
 }
 
+function setAgentMode(mode) {
+  agentMode.value = mode;
+  localStorage.setItem(AGENT_MODE_STORAGE_KEY, mode);
+}
+
 async function removeConversation(id) {
   const conversation = conversations.value.find((item) => item.id === id);
   if (!window.confirm(`删除“${conversation?.title || "该对话"}”及其全部消息？`)) return;
@@ -221,7 +232,16 @@ function toolLabel(name) {
 }
 
 function handleStreamEvent(message, event) {
-  if (event.type === "message.delta") {
+  if (event.type === "message.started") {
+    message.runId = event.run_id;
+    message.mode = event.mode;
+    resumableRun.value = {
+      runId: event.run_id,
+      conversationId: activeConversationId.value,
+      mode: event.mode,
+    };
+    localStorage.setItem(ACTIVE_RUN_STORAGE_KEY, JSON.stringify(resumableRun.value));
+  } else if (event.type === "message.delta") {
     message.content += event.delta || "";
   } else if (event.type === "message.reset") {
     message.content = "";
@@ -234,6 +254,25 @@ function handleStreamEvent(message, event) {
       label: toolLabel(event.name),
       status: "running",
     });
+  } else if (event.type === "node.started") {
+    const callId = `node-${event.node}`;
+    const existing = message.steps.find((item) => item.callId === callId);
+    if (existing) {
+      Object.assign(existing, { label: event.label || event.node, status: "running" });
+    } else {
+      message.steps.push({
+        callId,
+        name: event.node,
+        label: event.label || event.node,
+        status: "running",
+      });
+    }
+  } else if (["node.completed", "node.failed"].includes(event.type)) {
+    const callId = `node-${event.node}`;
+    const step = message.steps.find((item) => item.callId === callId);
+    if (step) step.status = event.type === "node.failed" ? "failed" : "completed";
+  } else if (event.type === "plan.ready") {
+    message.plan = event.plan;
   } else if (["tool.completed", "tool.failed"].includes(event.type)) {
     const step = message.steps.find((item) => item.callId === event.call_id);
     if (step) {
@@ -247,6 +286,8 @@ function handleStreamEvent(message, event) {
       steps: message.steps,
       status: "completed",
     });
+    resumableRun.value = null;
+    localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
   } else if (event.type === "message.failed") {
     throw new Error(event.message || "生成回答失败");
   }
@@ -283,6 +324,8 @@ async function submitMessage() {
     content: "",
     sources: [],
     steps: [],
+    plan: null,
+    runId: null,
     status: "streaming",
     created_at: new Date().toISOString(),
   });
@@ -303,6 +346,7 @@ async function submitMessage() {
       apiKey.value,
       tavilyApiKey.value,
       useRag.value,
+      agentMode.value,
       (event) => handleStreamEvent(streamingMessage, event),
       streamController.value.signal,
     );
@@ -317,6 +361,33 @@ async function submitMessage() {
       }
     } else {
       streamingMessage.status = "failed";
+      errorMessage.value = error.message;
+    }
+  } finally {
+    streamController.value = null;
+    isSending.value = false;
+  }
+}
+
+async function resumeGeneration(message) {
+  if (!message.runId || isSending.value || !apiKey.value) return;
+  message.status = "streaming";
+  errorMessage.value = "";
+  isSending.value = true;
+  streamController.value = new AbortController();
+  try {
+    await resumeAgentRunStream(
+      message.runId,
+      apiKey.value,
+      tavilyApiKey.value,
+      (event) => handleStreamEvent(message, event),
+      streamController.value.signal,
+    );
+  } catch (error) {
+    if (error.name === "AbortError") {
+      message.status = "stopped";
+    } else {
+      message.status = "failed";
       errorMessage.value = error.message;
     }
   } finally {
@@ -366,6 +437,37 @@ onMounted(async () => {
     await openConversation(conversations.value[0].id);
   } else {
     await startNewConversation();
+  }
+
+
+  if (resumableRun.value?.conversationId === activeConversationId.value) {
+    try {
+      const run = await getAgentRun(resumableRun.value.runId);
+      if (["pending", "running", "paused", "failed"].includes(run.status)) {
+        messages.value.push(reactive({
+          id: `run-${run.id}`,
+          role: "assistant",
+          content: "",
+          sources: [],
+          steps: (run.progress || []).map((step) => ({
+            ...step,
+            callId: `node-${step.node}`,
+            name: step.node,
+          })),
+          plan: run.plan?.length ? { objective: run.query, tasks: run.plan } : null,
+          runId: run.id,
+          mode: run.mode,
+          status: "stopped",
+          created_at: run.created_at,
+        }));
+      } else {
+        resumableRun.value = null;
+        localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+      }
+    } catch {
+      resumableRun.value = null;
+      localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+    }
   }
 });
 </script>
@@ -471,6 +573,14 @@ onMounted(async () => {
           >
             <div v-if="message.role === 'assistant'" class="assistant-avatar">N</div>
             <div class="message__body">
+              <div v-if="message.role === 'assistant' && message.plan?.tasks?.length" class="research-plan">
+                <strong>{{ message.plan.objective || "研究计划" }}</strong>
+                <ol>
+                  <li v-for="task in message.plan.tasks" :key="task.id">
+                    {{ task.question }}
+                  </li>
+                </ol>
+              </div>
               <div v-if="message.role === 'assistant' && message.steps?.length" class="agent-steps">
                 <div
                   v-for="step in message.steps"
@@ -518,6 +628,12 @@ onMounted(async () => {
                 <span>{{ formatDate(message.created_at) }}</span>
                 <span v-if="message.status === 'stopped'">已停止</span>
                 <span v-if="message.status === 'failed'">生成失败</span>
+                <button
+                  v-if="message.runId && ['stopped', 'failed'].includes(message.status)"
+                  class="copy-button"
+                  :disabled="isSending"
+                  @click="resumeGeneration(message)"
+                >继续任务</button>
                 <button
                   v-if="message.role === 'assistant' && message.content"
                   class="copy-button"
@@ -567,6 +683,19 @@ onMounted(async () => {
           </button>
         </div>
         <div class="composer-options">
+          <div class="mode-selector" aria-label="Agent 模式">
+            <button
+              v-for="option in [
+                { value: 'auto', label: '自动' },
+                { value: 'chat', label: '快速回答' },
+                { value: 'research', label: '深度研究' },
+              ]"
+              :key="option.value"
+              type="button"
+              :class="{ 'mode-selector__button--active': agentMode === option.value }"
+              @click="setAgentMode(option.value)"
+            >{{ option.label }}</button>
+          </div>
           <button
             type="button"
             class="rag-toggle"

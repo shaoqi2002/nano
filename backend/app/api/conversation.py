@@ -5,7 +5,7 @@ from contextlib import suppress
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,9 +24,8 @@ from app.service.conversation import (
     delete_existing_conversation,
     get_conversation_messages,
     get_conversations,
-    send_message,
-    send_message_stream as stream_message,
 )
+from app.service.agent_run import stream_new_run
 
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -72,6 +71,7 @@ async def read_conversations(
 async def create_message(
     conversation_id: UUID,
     request: SendMessageRequest,
+    http_request: Request,
     session: SessionDependency,
     api_key: Annotated[
         str,
@@ -83,23 +83,34 @@ async def create_message(
     ] = None,
 ) -> SendMessageResponse:
     try:
-        assistant_message = await send_message(
+        assistant_payload: dict | None = None
+        stream = stream_new_run(
             session=session,
             conversation_id=conversation_id,
             content=request.message,
             api_key=api_key,
             tavily_api_key=tavily_api_key,
             use_rag=request.use_rag,
+            requested_mode=request.mode,
+            checkpointer=http_request.app.state.agent_checkpointer,
         )
+        async for event in stream:
+            if event.get("type") == "message.completed":
+                assistant_payload = event["message"]
     except ConversationNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found",
         ) from error
+    if assistant_payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Agent did not complete the response",
+        )
 
     return SendMessageResponse(
         conversation_id=conversation_id,
-        assistant_message=MessageResponse.model_validate(assistant_message),
+        assistant_message=MessageResponse.model_validate(assistant_payload),
     )
 
 
@@ -107,6 +118,7 @@ async def create_message(
 async def create_message_stream(
     conversation_id: UUID,
     request: SendMessageRequest,
+    http_request: Request,
     session: SessionDependency,
     api_key: Annotated[
         str,
@@ -118,13 +130,15 @@ async def create_message_stream(
     ] = None,
 ) -> StreamingResponse:
     async def generate():
-        stream = stream_message(
+        stream = stream_new_run(
             session=session,
             conversation_id=conversation_id,
             content=request.message,
             api_key=api_key,
             tavily_api_key=tavily_api_key,
             use_rag=request.use_rag,
+            requested_mode=request.mode,
+            checkpointer=http_request.app.state.agent_checkpointer,
         )
         pending: asyncio.Task | None = None
         try:

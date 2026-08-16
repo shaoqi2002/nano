@@ -35,6 +35,11 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://agent:agent@localhost:5432/agent",
 )
+LANGGRAPH_DATABASE_URL = os.getenv(
+    "LANGGRAPH_DATABASE_URL",
+    DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1),
+)
+LANGGRAPH_POOL_SIZE = int(os.getenv("LANGGRAPH_POOL_SIZE", "10"))
 OBJECT_STORAGE_ENDPOINT_URL = os.getenv("OBJECT_STORAGE_ENDPOINT_URL", "")
 OBJECT_STORAGE_REGION = os.getenv("OBJECT_STORAGE_REGION", "")
 OBJECT_STORAGE_ACCESS_KEY_ID = os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", "")

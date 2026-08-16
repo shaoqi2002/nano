@@ -31,7 +31,7 @@ export function getMessages(conversationId) {
   return request(`/conversations/${conversationId}/messages`);
 }
 
-export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true) {
+export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true, mode = "auto") {
   const headers = {
     "X-DeepSeek-API-Key": apiKey,
   };
@@ -42,7 +42,7 @@ export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRa
   return request(`/conversations/${conversationId}/messages`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ message, use_rag: useRag }),
+    body: JSON.stringify({ message, use_rag: useRag, mode }),
   });
 }
 
@@ -85,6 +85,7 @@ export async function sendMessageStream(
   apiKey,
   tavilyApiKey,
   useRag,
+  mode,
   onEvent,
   signal,
 ) {
@@ -97,7 +98,26 @@ export async function sendMessageStream(
   const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages/stream`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ message, use_rag: useRag }),
+    body: JSON.stringify({ message, use_rag: useRag, mode }),
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || `请求失败（${response.status}）`);
+  }
+  await consumeEventStream(response, onEvent);
+}
+
+export function getAgentRun(runId) {
+  return request(`/agent-runs/${runId}`);
+}
+
+export async function resumeAgentRunStream(runId, apiKey, tavilyApiKey, onEvent, signal) {
+  const headers = { "X-DeepSeek-API-Key": apiKey };
+  if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
+  const response = await fetch(`${API_BASE_URL}/agent-runs/${runId}/resume/stream`, {
+    method: "POST",
+    headers,
     signal,
   });
   if (!response.ok) {

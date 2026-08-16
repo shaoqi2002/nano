@@ -618,6 +618,29 @@ button {
   margin-bottom: 12px;
 }
 
+.research-plan {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 9px;
+  padding: 10px 12px;
+  border: 1px solid #3c4845;
+  border-radius: 10px;
+  background: rgb(42 64 59 / 24%);
+  color: #bbb;
+  font-size: 12px;
+}
+
+.research-plan strong {
+  color: #b8ddd4;
+}
+
+.research-plan ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
+
 .agent-step {
   display: flex;
   align-items: center;
@@ -737,6 +760,31 @@ button {
   justify-content: space-between;
   gap: 12px;
   margin: 8px auto 0;
+}
+
+.mode-selector {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #3d3d3d;
+  border-radius: 9px;
+  background: #242424;
+}
+
+.mode-selector button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.mode-selector button:hover,
+.mode-selector .mode-selector__button--active {
+  background: #3a3a3a;
+  color: #e5e5e5;
 }
 
 .composer-options .composer-hint {
