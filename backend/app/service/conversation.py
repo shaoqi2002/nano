@@ -24,6 +24,7 @@ from app.core.config import (
     CHAT_CONTEXT_MESSAGE_LIMIT,
     DEEPSEEK_MODEL,
 )
+from app.eval.citations import extract_urls
 from app.model.conversation import Conversation, Message
 from app.repository.conversation import (
     add_message,
@@ -233,6 +234,7 @@ async def invoke_model_with_tools_stream(
                     "name": str(tool_call.get("name") or "unknown"),
                     "duration_ms": round((time.monotonic() - started_at) * 1000),
                     **({"message": str(result.content)} if failed else {}),
+                    **({"urls": extract_urls(result.content)} if not failed else {}),
                 }
         working_messages.extend(
             result for result in ordered_results if result is not None

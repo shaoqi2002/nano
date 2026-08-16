@@ -351,6 +351,15 @@ onMounted(async () => {
                   :class="{ 'eval-check--failed': !passed }"
                 >{{ passed ? "✓" : "×" }} {{ name }}</span>
               </div>
+              <div v-if="result.metrics?.citations?.citation_count" class="citation-result">
+                <strong>引用有效性</strong>
+                <span>引用 {{ result.metrics.citations.citation_count }}</span>
+                <span>有效 {{ Math.round(result.metrics.citations.valid_ratio * 100) }}%</span>
+                <span>工具来源 {{ Math.round(result.metrics.citations.grounded_ratio * 100) }}%</span>
+                <small v-if="result.metrics.citations.ungrounded_urls?.length">
+                  未在工具结果中找到：{{ result.metrics.citations.ungrounded_urls.join("、") }}
+                </small>
+              </div>
               <div v-if="result.metrics?.judge" class="judge-result">
                 <header>
                   <strong>LLM Judge</strong>
@@ -472,6 +481,10 @@ onMounted(async () => {
 .eval-checks { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .eval-checks span { padding: 4px 6px; border-radius: 5px; background: #29413a; color: #9ed8cb; font-size: 9px; }
 .eval-checks .eval-check--failed { background: #4a2929; color: #e6a0a0; }
+.citation-result { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; padding: 9px 10px; border: 1px solid #3a4643; border-radius: 8px; background: #202a28; }
+.citation-result strong { color: #b5d9d0; font-size: 10px; }
+.citation-result span { color: #8fcaba; font-size: 9px; }
+.citation-result small { width: 100%; overflow-wrap: anywhere; color: #d69a9a; font-size: 9px; }
 .eval-markdown-panel { display: grid; gap: 7px; margin-top: 9px; padding: 10px; border-radius: 7px; background: #1b1b1b; }
 .eval-markdown-panel > strong { color: #8faaa4; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
 .eval-markdown-panel .markdown-body { color: #bbb; font-size: 11px; line-height: 1.65; }

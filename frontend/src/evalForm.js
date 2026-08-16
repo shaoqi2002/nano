@@ -24,6 +24,9 @@ const LABELS = {
   "review.completed": "审核完成",
   "tool.started": "工具开始",
   "tool.completed": "工具完成",
+  none: "不注入故障",
+  researcher_once: "Researcher 首次失败（验证重试恢复）",
+  researcher_always: "Researcher 持续失败（验证故障隔离）",
 };
 
 function values(items = []) {
@@ -228,6 +231,48 @@ export function buildEvalFormSchema(options = {}, templates = []) {
       },
       {
         type: "panel",
+        title: "可靠性与引用",
+        customClass: "eval-form-section",
+        components: [{
+          type: "columns",
+          key: "resilience_layout",
+          customClass: "eval-grid eval-grid--three",
+          columns: [
+            {
+              width: 4,
+              components: [{
+                type: "select",
+                key: "fault_injection",
+                label: "故障注入",
+                description: "仅在深度研究评测中模拟 specialist 异常。",
+                data: { values: values(options.fault_injections || ["none"]) },
+                defaultValue: "none",
+              }],
+            },
+            {
+              width: 4,
+              components: [{
+                type: "select",
+                key: "min_citations",
+                label: "最少引用链接",
+                data: { values: values(["0", "1", "2", "3", "5"]) },
+                defaultValue: "0",
+              }],
+            },
+            {
+              width: 4,
+              components: [{
+                type: "checkbox",
+                key: "require_citation_provenance",
+                label: "引用必须来自工具结果",
+                defaultValue: false,
+              }],
+            },
+          ],
+        }],
+      },
+      {
+        type: "panel",
         title: "LLM Judge",
         customClass: "eval-form-section",
         components: [{
@@ -264,6 +309,9 @@ export function caseToSubmission(item = {}) {
   data.min_chars = String(item.min_chars ?? 100);
   data.max_duration_ms = item.max_duration_ms == null ? "" : String(item.max_duration_ms);
   data.pass_threshold = String(item.pass_threshold ?? 0.8);
+  data.min_citations = String(item.min_citations ?? 0);
+  data.require_citation_provenance = Boolean(item.require_citation_provenance);
+  data.fault_injection = item.fault_injection || "none";
   data.judge_rubric = item.judge_rubric
     || "回答应准确、完整、有依据，并遵循用户的格式和边界要求。";
   return data;
@@ -288,5 +336,8 @@ export function submissionToCase(data) {
   result.min_chars = Number(data.min_chars || 0);
   result.max_duration_ms = data.max_duration_ms ? Number(data.max_duration_ms) : null;
   result.pass_threshold = Number(data.pass_threshold || 0.8);
+  result.min_citations = Number(data.min_citations || 0);
+  result.require_citation_provenance = Boolean(data.require_citation_provenance);
+  result.fault_injection = data.fault_injection || "none";
   return result;
 }

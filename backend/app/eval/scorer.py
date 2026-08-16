@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.eval.dataset import EvalCase
+from app.eval.citations import citation_report
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ def score_agent_output(
         if role
     }
     event_types = {str(event.get("type")) for event in events if event.get("type")}
+    citations = citation_report(answer, events)
     checks: dict[str, bool] = {
         "completed": bool(answer.strip()),
         "min_chars": len(answer.strip()) >= case.min_chars,
@@ -53,6 +55,15 @@ def score_agent_output(
         checks[f"role:{role}"] = role in roles
     for event_type in case.expected_events:
         checks[f"event:{event_type}"] = event_type in event_types
+    if case.min_citations:
+        checks["citations:min_count"] = (
+            citations["citation_count"] >= case.min_citations
+        )
+        checks["citations:valid"] = not citations["invalid_urls"]
+    if case.require_citation_provenance:
+        checks["citations:provenance"] = (
+            bool(citations["cited_urls"]) and not citations["ungrounded_urls"]
+        )
     if case.max_duration_ms is not None:
         checks["within_latency_budget"] = duration_ms <= case.max_duration_ms
 
@@ -65,6 +76,7 @@ def score_agent_output(
         "nodes": sorted(nodes),
         "roles": sorted(roles),
         "events": sorted(event_types),
+        "citations": citations,
     }
     return EvalScore(
         passed=score >= case.pass_threshold,

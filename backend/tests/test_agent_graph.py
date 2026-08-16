@@ -104,13 +104,14 @@ class RevisionModel(FakeGraphModel):
         return RevisionStructuredModel(self, schema)
 
 
-def state(run_id: str = "run-1"):
+def state(run_id: str = "run-1", fault_injection: str = "none"):
     return initial_agent_state(
         run_id=run_id,
         conversation_id="conversation-1",
         query="research this",
         messages=[HumanMessage(content="research this")],
         rag_sources=[],
+        fault_injection=fault_injection,
     )
 
 
@@ -119,7 +120,7 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         @tool
         async def echo(query: str) -> str:
             """Echo a query."""
-            return f"result:{query}"
+            return f"result:{query} https://example.com/{query}"
 
         model = FakeGraphModel([
             AIMessage(
@@ -146,6 +147,8 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("message.reset", event_types)
         self.assertIn("tool.started", event_types)
         self.assertIn("tool.completed", event_types)
+        completed = next(event for event in events if event["type"] == "tool.completed")
+        self.assertEqual(completed["urls"], ["https://example.com/nano"])
         snapshot = await graph.aget_state(config)
         self.assertEqual(snapshot.values["final_answer"], "final answer")
 
@@ -188,6 +191,25 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any(event["type"] == "agent.retrying" for event in events))
         self.assertTrue(any(event["type"] == "agent.completed" for event in events))
+        snapshot = await graph.aget_state(config)
+        self.assertEqual(snapshot.values["status"], "completed")
+
+    async def test_eval_fault_is_isolated_from_the_research_graph(self) -> None:
+        graph = build_agent_graph(
+            FakeGraphModel(), [], "research", InMemorySaver()
+        )
+        config = {"configurable": {"thread_id": "fault-1"}}
+        events = [
+            event
+            async for event in graph.astream(
+                state("fault-1", "researcher_always"),
+                config=config,
+                stream_mode="custom",
+            )
+        ]
+
+        self.assertTrue(any(event["type"] == "agent.retrying" for event in events))
+        self.assertTrue(any(event["type"] == "agent.failed" for event in events))
         snapshot = await graph.aget_state(config)
         self.assertEqual(snapshot.values["status"], "completed")
 

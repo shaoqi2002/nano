@@ -3,11 +3,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 EVAL_FORM_OPTIONS = {
     "modes": ["chat", "research"],
+    "fault_injections": ["none", "researcher_once", "researcher_always"],
     "tools": ["document_search", "web_search", "web_extract", "deep_research"],
     "nodes": [
         "agent", "tools", "finalize", "planner", "writer", "reviewer", "revise",
@@ -34,10 +35,20 @@ class EvalCase(BaseModel):
     expected_nodes: list[str] = Field(default_factory=list)
     expected_roles: list[str] = Field(default_factory=list)
     expected_events: list[str] = Field(default_factory=list)
+    min_citations: int = Field(default=0, ge=0, le=20)
+    require_citation_provenance: bool = False
+    fault_injection: Literal[
+        "none", "researcher_once", "researcher_always"
+    ] = "none"
     min_chars: int = 1
     max_duration_ms: int | None = None
     pass_threshold: float = Field(default=0.8, ge=0, le=1)
     judge_rubric: str = "回答应准确、完整、有依据，并遵循用户的格式和边界要求。"
+    @model_validator(mode="after")
+    def validate_fault_mode(self):
+        if self.fault_injection != "none" and self.mode != "research":
+            raise ValueError("Fault injection is available only in research mode")
+        return self
 
 
 class EvalDataset(BaseModel):

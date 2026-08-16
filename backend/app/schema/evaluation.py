@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.eval.dataset import EVAL_FORM_OPTIONS
 
@@ -23,6 +23,11 @@ class EvalCaseDefinition(BaseModel):
     expected_nodes: list[str] = Field(default_factory=list, max_length=20)
     expected_roles: list[str] = Field(default_factory=list, max_length=20)
     expected_events: list[str] = Field(default_factory=list, max_length=20)
+    min_citations: int = Field(default=0, ge=0, le=20)
+    require_citation_provenance: bool = False
+    fault_injection: Literal[
+        "none", "researcher_once", "researcher_always"
+    ] = "none"
     min_chars: int = Field(default=1, ge=0, le=100_000)
     max_duration_ms: int | None = Field(default=None, ge=1000, le=900_000)
     pass_threshold: float = Field(default=0.8, ge=0, le=1)
@@ -31,6 +36,12 @@ class EvalCaseDefinition(BaseModel):
         min_length=1,
         max_length=3000,
     )
+
+    @model_validator(mode="after")
+    def validate_fault_mode(self):
+        if self.fault_injection != "none" and self.mode != "research":
+            raise ValueError("Fault injection is available only in research mode")
+        return self
 
     @field_validator(
         "required_terms",

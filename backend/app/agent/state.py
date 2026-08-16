@@ -47,3 +47,4 @@ class AgentState(TypedDict, total=False):
     revision_count: int
     status: str
     error: str | None
+    fault_injection: Literal["none", "researcher_once", "researcher_always"]

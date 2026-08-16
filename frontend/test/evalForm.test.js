@@ -15,6 +15,7 @@ test("builds click-oriented controls from backend options", () => {
     nodes: ["planner"],
     roles: ["supervisor"],
     events: ["agent.delegated"],
+    fault_injections: ["none", "researcher_once"],
   }, [{ id: "preset", title: "Preset", source: "builtin" }]);
   const components = JSON.stringify(schema.components);
 
@@ -22,6 +23,7 @@ test("builds click-oriented controls from backend options", () => {
   assert.match(components, /web_search/);
   assert.match(components, /agent\.delegated/);
   assert.match(components, /Preset/);
+  assert.match(components, /researcher_once/);
 });
 
 test("round trips eval cases through Formio submission values", () => {
@@ -35,6 +37,9 @@ test("round trips eval cases through Formio submission values", () => {
     min_chars: 300,
     max_duration_ms: 120000,
     pass_threshold: 0.75,
+    min_citations: 2,
+    require_citation_provenance: true,
+    fault_injection: "researcher_once",
   });
   const definition = submissionToCase(submission);
 
@@ -43,5 +48,8 @@ test("round trips eval cases through Formio submission values", () => {
   assert.equal(definition.min_chars, 300);
   assert.equal(definition.max_duration_ms, 120000);
   assert.equal(definition.pass_threshold, 0.75);
+  assert.equal(definition.min_citations, 2);
+  assert.equal(definition.require_citation_provenance, true);
+  assert.equal(definition.fault_injection, "researcher_once");
   assert.equal("id" in definition, false);
 });

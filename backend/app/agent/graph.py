@@ -11,6 +11,7 @@ from langgraph.types import Send
 
 from app.agent.state import AgentState, ResearchPlan, ReviewResult, SpecialistRole
 from app.agent.structured import with_structured_output
+from app.eval.citations import extract_urls
 from app.core.config import (
     AGENT_MAX_RESEARCH_RETRIES,
     AGENT_MAX_REVISIONS,
@@ -82,6 +83,7 @@ def initial_agent_state(
     query: str,
     messages: list[Any],
     rag_sources: list[dict[str, Any]],
+    fault_injection: str = "none",
 ) -> AgentState:
     return {
         "run_id": run_id,
@@ -94,6 +96,7 @@ def initial_agent_state(
         "research_results": [],
         "revision_count": 0,
         "status": "running",
+        "fault_injection": fault_injection,
     }
 
 
@@ -224,6 +227,8 @@ def _build_chat_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
             }
             if failed:
                 event["message"] = str(message.content)
+            else:
+                event["urls"] = extract_urls(message.content)
             writer(event)
         return {"messages": messages, "tool_call_count": total}
 
@@ -322,6 +327,7 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
                 "query": state["query"],
                 "task": task,
                 "rag_sources": state.get("rag_sources", []),
+                "fault_injection": state.get("fault_injection", "none"),
             })
             for task in state.get("plan", [])
         ]
@@ -361,6 +367,11 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
             attempts = attempt + 1
             final: AIMessage | None = None
             try:
+                fault = state.get("fault_injection", "none")
+                if fault == "researcher_always" or (
+                    fault == "researcher_once" and attempt == 0
+                ):
+                    raise RuntimeError(f"injected eval fault: {fault}")
                 async for event in invoke_model_with_tools_stream(
                     model, assigned_tools, messages
                 ):

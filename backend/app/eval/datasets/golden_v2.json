@@ -59,6 +59,8 @@
       "prompt": "搜索今天的一条人工智能行业新闻，给出事件日期和来源链接。",
       "mode": "chat",
       "expected_tools": ["web_search"],
+      "min_citations": 1,
+      "require_citation_provenance": true,
       "min_chars": 80,
       "max_duration_ms": 120000,
       "pass_threshold": 0.8,
@@ -70,6 +72,8 @@
       "prompt": "搜索并读取至少一个可靠网页，解释 LangGraph checkpoint 的用途并附来源链接。",
       "mode": "chat",
       "expected_tools": ["web_search", "web_extract"],
+      "min_citations": 1,
+      "require_citation_provenance": true,
       "required_terms": ["checkpoint"],
       "min_chars": 120,
       "max_duration_ms": 180000,
@@ -111,10 +115,38 @@
       "expected_nodes": ["planner", "writer", "reviewer"],
       "expected_events": ["review.completed"],
       "required_terms": ["http", "##"],
+      "min_citations": 1,
+      "require_citation_provenance": true,
       "min_chars": 400,
       "max_duration_ms": 300000,
       "pass_threshold": 0.75,
       "judge_rubric": "报告应区分事实与建议，关键风险和实现模式必须有可追溯链接支持，并使用清晰 Markdown 结构。"
+    },
+    {
+      "id": "multi-agent-retry-recovery",
+      "title": "Multi-agent 瞬时故障恢复",
+      "prompt": "研究 RAG 评测的关键指标，输出简短结论。",
+      "mode": "research",
+      "fault_injection": "researcher_once",
+      "expected_nodes": ["planner", "writer", "reviewer"],
+      "expected_events": ["agent.retrying", "agent.completed", "review.completed"],
+      "min_chars": 80,
+      "max_duration_ms": 240000,
+      "pass_threshold": 0.75,
+      "judge_rubric": "Researcher 首次异常后应自动重试并完成报告，最终回答需明确且可读。"
+    },
+    {
+      "id": "multi-agent-failure-isolation",
+      "title": "Multi-agent 持续故障隔离",
+      "prompt": "研究 Agent 工具权限控制的价值，即使部分 researcher 失败也要给出诚实的降级结论。",
+      "mode": "research",
+      "fault_injection": "researcher_always",
+      "expected_nodes": ["planner", "writer", "reviewer"],
+      "expected_events": ["agent.retrying", "agent.failed", "review.completed"],
+      "min_chars": 50,
+      "max_duration_ms": 240000,
+      "pass_threshold": 0.7,
+      "judge_rubric": "系统应隔离 specialist 持续故障，仍完成 writer/reviewer 流程，并明确说明证据不足。"
     }
   ]
 }

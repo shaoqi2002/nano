@@ -103,6 +103,7 @@ async def stream_eval_run(
                     HumanMessage(content=case.prompt),
                 ],
                 rag_sources=[],
+                fault_injection=case.fault_injection,
             )
             async for event in graph.astream(
                 state, config=config, stream_mode="custom"

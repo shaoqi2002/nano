@@ -81,6 +81,40 @@ class EvaluationTests(unittest.TestCase):
         self.assertIn("web_search", EVAL_FORM_OPTIONS["tools"])
         self.assertIn("reviewer", EVAL_FORM_OPTIONS["roles"])
         self.assertIn("agent.delegated", EVAL_FORM_OPTIONS["events"])
+        self.assertIn("researcher_once", EVAL_FORM_OPTIONS["fault_injections"])
+
+    def test_scorer_validates_citation_provenance(self) -> None:
+        case = EvalCase(
+            id="citations",
+            title="Citations",
+            prompt="test",
+            min_citations=1,
+            require_citation_provenance=True,
+            pass_threshold=1.0,
+        )
+        events = [{
+            "type": "tool.completed",
+            "name": "web_search",
+            "urls": ["https://docs.example.com/guide/"],
+        }]
+
+        grounded = score_agent_output(
+            case,
+            "See https://docs.example.com/guide for evidence.",
+            events,
+            10,
+        )
+        invented = score_agent_output(
+            case,
+            "See https://invented.example/report for evidence.",
+            events,
+            10,
+        )
+
+        self.assertTrue(grounded.passed)
+        self.assertEqual(grounded.metrics["citations"]["grounded_ratio"], 1.0)
+        self.assertFalse(invented.passed)
+        self.assertFalse(invented.metrics["checks"]["citations:provenance"])
 
     def test_scorer_reports_failed_expectations(self) -> None:
         case = EvalCase(
