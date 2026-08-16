@@ -2,6 +2,7 @@ import unittest
 
 from app.eval.dataset import EvalCase, load_golden_dataset
 from app.eval.scorer import score_agent_output
+from app.eval.judge import JudgeVerdict, combine_with_judge
 
 
 class EvaluationTests(unittest.TestCase):
@@ -54,6 +55,59 @@ class EvaluationTests(unittest.TestCase):
         self.assertFalse(score.passed)
         self.assertFalse(score.metrics["checks"]["contains:required"])
         self.assertFalse(score.metrics["checks"]["tool:web_search"])
+
+    def test_judge_score_is_weighted_and_explained(self) -> None:
+        deterministic = score_agent_output(
+            EvalCase(id="judge", title="Judge", prompt="test"),
+            "answer",
+            [],
+            10,
+        )
+        verdict = JudgeVerdict(
+            correctness=4,
+            completeness=4,
+            groundedness=3,
+            instruction_following=5,
+            reason="Mostly correct and follows the request.",
+        )
+
+        combined = combine_with_judge(
+            deterministic,
+            verdict,
+            judge_weight=0.5,
+            pass_threshold=0.8,
+        )
+
+        self.assertEqual(verdict.normalized_score, 0.8)
+        self.assertEqual(combined.score, 0.9)
+        self.assertTrue(combined.passed)
+        self.assertEqual(combined.metrics["judge"]["reason"], verdict.reason)
+
+    def test_critical_judge_error_forces_failure(self) -> None:
+        deterministic = score_agent_output(
+            EvalCase(id="critical", title="Critical", prompt="test"),
+            "answer",
+            [],
+            10,
+        )
+        verdict = JudgeVerdict(
+            correctness=5,
+            completeness=5,
+            groundedness=5,
+            instruction_following=5,
+            critical_error=True,
+            reason="Contains a fabricated source.",
+        )
+
+        combined = combine_with_judge(
+            deterministic,
+            verdict,
+            judge_weight=0.5,
+            pass_threshold=0.8,
+        )
+
+        self.assertEqual(combined.score, 1.0)
+        self.assertFalse(combined.passed)
 
 
 if __name__ == "__main__":

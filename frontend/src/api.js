@@ -128,7 +128,15 @@ export function getEvalRun(runId) {
   return request(`/evals/runs/${runId}`);
 }
 
-export async function runEvalStream(caseIds, apiKey, tavilyApiKey, onEvent, signal) {
+export async function runEvalStream(
+  caseIds,
+  apiKey,
+  tavilyApiKey,
+  judgeEnabled,
+  judgeWeight,
+  onEvent,
+  signal,
+) {
   const headers = {
     "Content-Type": "application/json",
     "X-DeepSeek-API-Key": apiKey,
@@ -137,7 +145,11 @@ export async function runEvalStream(caseIds, apiKey, tavilyApiKey, onEvent, sign
   const response = await fetch(`${API_BASE_URL}/evals/runs/stream`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ case_ids: caseIds }),
+    body: JSON.stringify({
+      case_ids: caseIds,
+      judge_enabled: judgeEnabled,
+      judge_weight: judgeWeight,
+    }),
     signal,
   });
   if (!response.ok) {

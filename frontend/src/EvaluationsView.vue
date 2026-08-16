@@ -25,6 +25,8 @@ const isLoading = ref(true);
 const isRunning = ref(false);
 const errorMessage = ref("");
 const controller = ref(null);
+const judgeEnabled = ref(false);
+const judgeWeight = ref(0.5);
 
 const selectedCount = computed(() => selectedIds.value.length);
 const passRate = computed(() => {
@@ -61,6 +63,11 @@ function handleEvalEvent(event) {
       passed_count: 0,
       score: null,
       duration_ms: null,
+      config: {
+        judge_enabled: event.judge_enabled,
+        judge_weight: judgeWeight.value,
+        judge_model: "configured judge model",
+      },
     };
     results.value = [];
   } else if (event.type === "case.started") {
@@ -69,7 +76,10 @@ function handleEvalEvent(event) {
       title: event.title,
       index: event.index,
       total: event.total,
+      judging: false,
     };
+  } else if (event.type === "case.judging") {
+    progress.value = { ...progress.value, judging: true };
   } else if (event.type === "case.completed") {
     results.value.push(event.result);
     activeRun.value = {
@@ -99,6 +109,8 @@ async function startEval() {
       selectedIds.value,
       props.apiKey,
       props.tavilyApiKey,
+      judgeEnabled.value,
+      judgeWeight.value,
       handleEvalEvent,
       controller.value.signal,
     );
@@ -172,6 +184,17 @@ onMounted(async () => {
         <section>
           <h2>黄金测试集</h2>
           <p>{{ dataset?.description }}</p>
+          <label class="judge-toggle">
+            <input v-model="judgeEnabled" type="checkbox">
+            <span>
+              <strong>LLM-as-a-Judge</strong>
+              <small>启用后每个用例增加一次模型调用</small>
+            </span>
+          </label>
+          <label v-if="judgeEnabled" class="judge-weight">
+            <span>Judge 权重 {{ Math.round(judgeWeight * 100) }}%</span>
+            <input v-model.number="judgeWeight" type="range" min="0.1" max="0.9" step="0.1">
+          </label>
           <button
             v-for="item in dataset?.cases"
             :key="item.id"
@@ -200,7 +223,10 @@ onMounted(async () => {
       <section class="eval-content">
         <div v-if="progress" class="eval-progress">
           <span>{{ progress.index }}/{{ progress.total }}</span>
-          <div><strong>{{ progress.title }}</strong><small>Agent 正在执行并评分…</small></div>
+          <div>
+            <strong>{{ progress.title }}</strong>
+            <small>{{ progress.judging ? "LLM Judge 正在独立评审…" : "Agent 正在执行测试用例…" }}</small>
+          </div>
         </div>
 
         <div v-if="activeRun" class="eval-summary">
@@ -208,6 +234,10 @@ onMounted(async () => {
           <div><span>通过率</span><strong>{{ passRate }}</strong></div>
           <div><span>通过用例</span><strong>{{ activeRun.passed_count }}/{{ activeRun.case_count }}</strong></div>
           <div><span>总耗时</span><strong>{{ formatDuration(activeRun.duration_ms) }}</strong></div>
+        </div>
+        <div v-if="activeRun?.config?.judge_enabled" class="judge-banner">
+          Judge 已启用 · 权重 {{ Math.round((activeRun.config.judge_weight || 0.5) * 100) }}%
+          · {{ activeRun.config.judge_model }}
         </div>
 
         <div v-if="!activeRun" class="eval-empty">选择用例并运行第一次评测。</div>
@@ -233,6 +263,22 @@ onMounted(async () => {
                   :class="{ 'eval-check--failed': !passed }"
                 >{{ passed ? "✓" : "×" }} {{ name }}</span>
               </div>
+              <div v-if="result.metrics?.judge" class="judge-result">
+                <header>
+                  <strong>LLM Judge</strong>
+                  <span>{{ Math.round(result.metrics.judge.normalized_score * 100) }}%</span>
+                </header>
+                <div>
+                  <span>正确性 {{ result.metrics.judge.correctness }}/5</span>
+                  <span>完整性 {{ result.metrics.judge.completeness }}/5</span>
+                  <span>依据性 {{ result.metrics.judge.groundedness }}/5</span>
+                  <span>指令遵循 {{ result.metrics.judge.instruction_following }}/5</span>
+                </div>
+                <p>{{ result.metrics.judge.reason }}</p>
+              </div>
+              <p v-else-if="result.metrics?.judge_error" class="eval-result__error">
+                Judge 失败，已回退到确定性评分：{{ result.metrics.judge_error }}
+              </p>
               <pre>{{ result.output }}</pre>
             </details>
           </article>
@@ -260,6 +306,13 @@ onMounted(async () => {
 .eval-sidebar section { display: grid; gap: 6px; }
 .eval-sidebar h2 { margin: 4px 8px 0; color: #aaa; font-size: 11px; text-transform: uppercase; }
 .eval-sidebar p { margin: 2px 8px 8px; color: #777; font-size: 10px; line-height: 1.5; }
+.judge-toggle { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 7px; margin: 2px 8px 8px; padding: 9px; border: 1px solid #3d3d3d; border-radius: 8px; cursor: pointer; }
+.judge-toggle input { margin: 2px 0 0; accent-color: #82c9b9; }
+.judge-toggle > span { display: grid; gap: 3px; }
+.judge-toggle strong { color: #ccc; font-size: 11px; }
+.judge-toggle small, .judge-weight span { color: #777; font-size: 9px; }
+.judge-weight { display: grid; gap: 5px; margin: 0 8px 9px; }
+.judge-weight input { width: 100%; accent-color: #82c9b9; }
 .eval-case { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 7px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: #aaa; cursor: pointer; text-align: left; }
 .eval-case:hover, .eval-case--selected { background: #2c2c2c; }
 .eval-checkbox { display: grid; width: 17px; height: 17px; place-items: center; border: 1px solid #555; border-radius: 4px; color: #8fcaba; font-size: 10px; }
@@ -281,6 +334,7 @@ onMounted(async () => {
 .eval-summary div { display: grid; gap: 5px; padding: 14px; border: 1px solid #393939; border-radius: 10px; background: #272727; }
 .eval-summary span { color: #888; font-size: 10px; }
 .eval-summary strong { color: #ddd; font-size: 18px; }
+.judge-banner { margin: -8px 0 14px; padding: 8px 11px; border: 1px solid #3d4946; border-radius: 8px; background: #26312f; color: #9dbab3; font-size: 10px; }
 .eval-results { display: grid; gap: 9px; }
 .eval-result { overflow: hidden; border: 1px solid #3b3b3b; border-radius: 10px; background: #262626; }
 .eval-result > header { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 11px 13px; }
@@ -295,5 +349,12 @@ onMounted(async () => {
 .eval-checks .eval-check--failed { background: #4a2929; color: #e6a0a0; }
 .eval-result pre { max-height: 300px; margin: 9px 0 0; padding: 10px; overflow: auto; border-radius: 7px; background: #1b1b1b; color: #bbb; font: 11px/1.6 inherit; white-space: pre-wrap; }
 .eval-result__error { margin: 0 13px 8px; color: #e89c9c; font-size: 10px; }
+.judge-result { display: grid; gap: 7px; margin-top: 9px; padding: 10px; border: 1px solid #3a4643; border-radius: 8px; background: #202a28; }
+.judge-result header { display: flex; justify-content: space-between; }
+.judge-result header strong { color: #b5d9d0; font-size: 11px; }
+.judge-result header span { color: #8fcaba; font-size: 11px; font-weight: 700; }
+.judge-result > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.judge-result > div span { color: #999; font-size: 9px; }
+.judge-result p { margin: 0; color: #aaa; font-size: 10px; line-height: 1.5; }
 @media (max-width: 760px) { .eval-layout { grid-template-columns: 150px minmax(0, 1fr); } .eval-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .eval-result > header { grid-template-columns: 40px minmax(0, 1fr); } .eval-result header small { display: none; } }
 </style>

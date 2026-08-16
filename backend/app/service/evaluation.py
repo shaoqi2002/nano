@@ -5,11 +5,14 @@ from typing import Any
 from uuid import UUID
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_deepseek import ChatDeepSeek
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import build_agent_graph, initial_agent_state
-from app.core.config import DEEPSEEK_MODEL
+from app.core.config import DEEPSEEK_MODEL, EVAL_JUDGE_MODEL
 from app.eval.dataset import EvalCase
+from app.eval.judge import combine_with_judge, judge_agent_output
 from app.eval.scorer import score_agent_output
 from app.model.agent_eval import AgentEvalRun
 from app.repository.agent_eval import add_eval_result, create_eval_run
@@ -29,13 +32,21 @@ async def stream_eval_run(
     api_key: str,
     tavily_api_key: str | None,
     checkpointer: Any,
+    judge_enabled: bool = False,
+    judge_weight: float = 0.5,
 ) -> AsyncIterator[dict[str, Any]]:
     async with session.begin():
         run = await create_eval_run(
             session,
             dataset_version,
             len(cases),
-            {"case_ids": [case.id for case in cases], "model": DEEPSEEK_MODEL},
+            {
+                "case_ids": [case.id for case in cases],
+                "model": DEEPSEEK_MODEL,
+                "judge_enabled": judge_enabled,
+                "judge_model": EVAL_JUDGE_MODEL if judge_enabled else None,
+                "judge_weight": judge_weight,
+            },
         )
         run.status = "running"
     yield {
@@ -43,12 +54,23 @@ async def stream_eval_run(
         "run_id": str(run.id),
         "dataset_version": dataset_version,
         "case_count": len(cases),
+        "judge_enabled": judge_enabled,
     }
 
     suite_started = time.monotonic()
     scores: list[float] = []
     passed_count = 0
     model = create_model(api_key)
+    judge_model = (
+        ChatDeepSeek(
+            model=EVAL_JUDGE_MODEL,
+            api_key=SecretStr(api_key),
+            temperature=0,
+            max_retries=2,
+        )
+        if judge_enabled
+        else None
+    )
     tools = create_tools(tavily_api_key)
 
     for index, case in enumerate(cases, start=1):
@@ -91,13 +113,49 @@ async def stream_eval_run(
         except Exception as error:
             error_message = str(error)[:2000]
 
-        duration_ms = round((time.monotonic() - case_started) * 1000)
-        scored = score_agent_output(case, output, events, duration_ms)
+        agent_duration_ms = round((time.monotonic() - case_started) * 1000)
+        scored = score_agent_output(case, output, events, agent_duration_ms)
         if error_message:
             scored = type(scored)(passed=False, score=0.0, metrics={
                 **scored.metrics,
                 "execution_error": True,
             })
+        elif judge_model is not None:
+            yield {
+                "type": "case.judging",
+                "run_id": str(run.id),
+                "case_id": case.id,
+                "title": case.title,
+            }
+            try:
+                verdict = await judge_agent_output(
+                    judge_model, case, output, events
+                )
+                scored = combine_with_judge(
+                    scored,
+                    verdict,
+                    judge_weight=judge_weight,
+                    pass_threshold=case.pass_threshold,
+                )
+            except Exception as judge_error:
+                scored = type(scored)(
+                    passed=scored.passed,
+                    score=scored.score,
+                    metrics={
+                        **scored.metrics,
+                        "judge_error": str(judge_error)[:1000],
+                    },
+                )
+        duration_ms = round((time.monotonic() - case_started) * 1000)
+        scored = type(scored)(
+            passed=scored.passed,
+            score=scored.score,
+            metrics={
+                **scored.metrics,
+                "agent_duration_ms": agent_duration_ms,
+                "judge_duration_ms": max(0, duration_ms - agent_duration_ms),
+            },
+        )
         scores.append(scored.score)
         if scored.passed:
             passed_count += 1

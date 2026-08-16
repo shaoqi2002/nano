@@ -93,6 +93,8 @@ async def create_eval_run_stream(
             api_key=api_key,
             tavily_api_key=tavily_api_key,
             checkpointer=request.app.state.agent_checkpointer,
+            judge_enabled=body.judge_enabled,
+            judge_weight=body.judge_weight,
         )
         pending: asyncio.Task | None = None
         active_run_id: UUID | None = None

@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class EvalRunRequest(BaseModel):
     case_ids: list[str] | None = Field(default=None, max_length=20)
+    judge_enabled: bool = False
+    judge_weight: float = Field(default=0.5, ge=0, le=1)
 
 
 class EvalCaseResponse(BaseModel):

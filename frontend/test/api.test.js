@@ -7,6 +7,7 @@ import {
   getAgentRunEvents,
   getEvalDataset,
   sendMessage,
+  runEvalStream,
   uploadDocument,
 } from "../src/api.js";
 
@@ -17,6 +18,43 @@ test("builds inline and download document URLs", () => {
     documentContentUrl("doc-1", true),
     "/api/documents/doc-1/content?download=true",
   );
+});
+
+test("sends optional LLM judge settings", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedOptions;
+  const encoder = new TextEncoder();
+  globalThis.fetch = async (_url, options) => {
+    capturedOptions = options;
+    return {
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(
+            "event: eval.completed\ndata: {\"run\":{\"score\":1}}\n\n",
+          ));
+          controller.close();
+        },
+      }),
+    };
+  };
+
+  try {
+    const events = [];
+    await runEvalStream(
+      ["case-1"], "sk-test", "", true, 0.6,
+      (event) => events.push(event),
+    );
+    assert.deepEqual(JSON.parse(capturedOptions.body), {
+      case_ids: ["case-1"],
+      judge_enabled: true,
+      judge_weight: 0.6,
+    });
+    assert.equal(events[0].type, "eval.completed");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("loads the versioned eval dataset", async () => {

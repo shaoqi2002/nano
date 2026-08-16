@@ -18,6 +18,7 @@ class EvalCase(BaseModel):
     min_chars: int = 1
     max_duration_ms: int | None = None
     pass_threshold: float = Field(default=0.8, ge=0, le=1)
+    judge_rubric: str = "回答应准确、完整、有依据，并遵循用户的格式和边界要求。"
 
 
 class EvalDataset(BaseModel):
