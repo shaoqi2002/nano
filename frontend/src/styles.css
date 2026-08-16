@@ -787,6 +787,147 @@ button {
   color: #e5e5e5;
 }
 
+.trace-dialog {
+  display: grid;
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 28px));
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #444;
+  border-radius: 16px;
+  background: #242424;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+}
+
+.trace-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid #383838;
+}
+
+.trace-dialog__header h2,
+.trace-dialog__header p {
+  margin: 0;
+}
+
+.trace-dialog__header h2 {
+  font-size: 16px;
+}
+
+.trace-dialog__header p {
+  margin-top: 4px;
+  color: #888;
+  font-size: 11px;
+}
+
+.trace-loading {
+  padding: 36px;
+  color: #999;
+  text-align: center;
+}
+
+.trace-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #383838;
+}
+
+.trace-metrics > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #2d2d2d;
+}
+
+.trace-metrics span {
+  color: #888;
+  font-size: 10px;
+}
+
+.trace-metrics strong {
+  overflow: hidden;
+  color: #ddd;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-timeline {
+  min-height: 0;
+  padding: 14px 18px 24px;
+  overflow-y: auto;
+}
+
+.trace-event {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 9px;
+  padding: 8px 0;
+}
+
+.trace-event__dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #75b8a8;
+  box-shadow: 0 0 0 4px rgb(117 184 168 / 10%);
+}
+
+.trace-event__dot--failed {
+  background: #e38383;
+  box-shadow: 0 0 0 4px rgb(227 131 131 / 10%);
+}
+
+.trace-event > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.trace-event strong {
+  color: #ddd;
+  font-size: 12px;
+}
+
+.trace-event span,
+.trace-event summary {
+  color: #858585;
+  font-size: 10px;
+}
+
+.trace-event details {
+  margin-top: 4px;
+}
+
+.trace-event summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.trace-event pre {
+  max-height: 180px;
+  margin: 6px 0 0;
+  padding: 9px;
+  overflow: auto;
+  border-radius: 7px;
+  background: #1b1b1b;
+  color: #aaa;
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 600px) {
+  .trace-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .composer-options .composer-hint {
   width: auto;
   margin: 0;

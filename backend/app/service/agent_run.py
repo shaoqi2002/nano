@@ -11,6 +11,7 @@ from app.agent import build_agent_graph, initial_agent_state, resolve_agent_mode
 from app.model.agent_run import AgentRun
 from app.model.conversation import Message
 from app.repository.agent_run import (
+    add_agent_run_event,
     create_agent_run,
     get_agent_run,
     get_agent_run_for_update,
@@ -35,8 +36,83 @@ class AgentRunNotFoundError(Exception):
     pass
 
 
+TRACE_EVENT_TYPES = {
+    "run.started",
+    "run.paused",
+    "run.cancelled",
+    "run.failed",
+    "node.started",
+    "node.completed",
+    "node.failed",
+    "tool.started",
+    "tool.completed",
+    "tool.failed",
+    "plan.ready",
+    "review.completed",
+    "message.completed",
+}
+SENSITIVE_FIELDS = {"api_key", "apikey", "authorization", "secret", "token"}
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _safe_trace_value(value: Any, depth: int = 0) -> Any:
+    if depth >= 4:
+        return "[truncated]"
+    if isinstance(value, str):
+        return value[:2000]
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [_safe_trace_value(item, depth + 1) for item in value[:20]]
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        for key, item in list(value.items())[:30]:
+            normalized = str(key).lower().replace("-", "_")
+            result[str(key)] = (
+                "[redacted]"
+                if any(field in normalized for field in SENSITIVE_FIELDS)
+                else _safe_trace_value(item, depth + 1)
+            )
+        return result
+    return str(value)[:2000]
+
+
+def _trace_payload(event: dict[str, Any]) -> dict[str, Any]:
+    ignored = {"type", "node", "name", "duration_ms", "delta"}
+    return _safe_trace_value({
+        key: value for key, value in event.items() if key not in ignored
+    })
+
+
+async def _record_trace_event(
+    session: AsyncSession, run_id: UUID, event: dict[str, Any]
+) -> None:
+    event_type = str(event.get("type") or "")
+    if event_type not in TRACE_EVENT_TYPES:
+        return
+    current = await get_agent_run_for_update(session, run_id)
+    if current is None:
+        raise AgentRunNotFoundError
+    if event_type == "tool.started":
+        current.tool_call_count += 1
+    elif event_type == "tool.failed":
+        current.tool_failure_count += 1
+    await add_agent_run_event(
+        session,
+        run_id,
+        event_type,
+        node=str(event.get("node")) if event.get("node") else None,
+        tool_name=str(event.get("name")) if event.get("name") else None,
+        duration_ms=(
+            int(event["duration_ms"])
+            if isinstance(event.get("duration_ms"), (int, float))
+            else None
+        ),
+        payload=_trace_payload(event),
+    )
 
 
 def _step_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
@@ -91,6 +167,9 @@ async def request_cancel(session: AsyncSession, run_id: UUID) -> AgentRun:
         if run.status in {"pending", "paused"}:
             run.status = "cancelled"
             run.completed_at = _now()
+            await _record_trace_event(
+                session, run_id, {"type": "run.cancelled"}
+            )
     return run
 
 
@@ -116,12 +195,15 @@ async def stream_new_run(
     }
 
     if use_rag:
-        yield {
+        rag_started_event = {
             "type": "tool.started",
             "call_id": "rag-retrieval",
             "name": "document_search",
             "input": {"query": content},
         }
+        async with session.begin():
+            await _record_trace_event(session, run.id, rag_started_event)
+        yield rag_started_event
         rag_error: str | None = None
         started = _now()
         try:
@@ -129,7 +211,7 @@ async def stream_new_run(
                 sources = await retrieve_sources(session, content)
         except (EmbeddingConfigurationError, EmbeddingServiceError):
             rag_error = "文档检索暂时不可用"
-        yield {
+        rag_completed_event = {
             "type": "tool.failed" if rag_error else "tool.completed",
             "call_id": "rag-retrieval",
             "name": "document_search",
@@ -137,6 +219,9 @@ async def stream_new_run(
             "result_count": len(sources),
             **({"message": rag_error} if rag_error else {}),
         }
+        async with session.begin():
+            await _record_trace_event(session, run.id, rag_completed_event)
+        yield rag_completed_event
         if sources:
             yield {"type": "sources.ready", "sources": public_sources(sources)}
 
@@ -186,6 +271,7 @@ async def stream_resume_run(
                     "content": assistant.content,
                     "sources": assistant.sources,
                     "created_at": assistant.created_at.isoformat(),
+                    "run_id": str(run.id),
                 },
             }
         return
@@ -229,6 +315,11 @@ async def _stream_graph(
             current.started_at = current.started_at or _now()
             current.error = None
             current.cancel_requested = False
+            await _record_trace_event(
+                session,
+                run.id,
+                {"type": "run.started", "mode": run.mode},
+            )
 
         async for event in graph.astream(
             state, config=config, stream_mode="custom"
@@ -248,8 +339,9 @@ async def _stream_graph(
                 else:
                     progress.append(step)
             persist_progress = bool(step) or event.get("type") == "plan.ready"
+            persist_trace = event.get("type") in TRACE_EVENT_TYPES
             cancelled = False
-            if persist_progress:
+            if persist_progress or persist_trace:
                 async with session.begin():
                     current = await get_agent_run_for_update(session, run.id)
                     if current is None:
@@ -262,6 +354,8 @@ async def _stream_graph(
                     current.progress = progress
                     if step:
                         current.current_node = step["node"]
+                    if persist_trace:
+                        await _record_trace_event(session, run.id, event)
             if cancelled:
                 yield {"type": "run.cancelled", "run_id": str(run.id)}
                 return
@@ -293,6 +387,19 @@ async def _stream_graph(
             current.progress = progress
             current.plan = plan
             current.completed_at = _now()
+            current.duration_ms = round(
+                (current.completed_at - (current.started_at or current.created_at))
+                .total_seconds()
+                * 1000
+            )
+            await _record_trace_event(
+                session,
+                run.id,
+                {
+                    "type": "message.completed",
+                    "message_id": current.assistant_message_id,
+                },
+            )
         if assistant is not None:
             yield {
                 "type": "message.completed",
@@ -302,6 +409,7 @@ async def _stream_graph(
                     "content": assistant.content,
                     "sources": assistant.sources,
                     "created_at": assistant.created_at.isoformat(),
+                    "run_id": str(run.id),
                 },
             }
     except asyncio.CancelledError:
@@ -311,6 +419,9 @@ async def _stream_graph(
                 current.status = "paused"
                 current.progress = progress
                 current.plan = plan
+                await _record_trace_event(
+                    session, run.id, {"type": "run.paused"}
+                )
         raise
     except Exception as error:
         async with session.begin():
@@ -320,4 +431,9 @@ async def _stream_graph(
                 current.error = str(error)[:2000]
                 current.progress = progress
                 current.plan = plan
+                await _record_trace_event(
+                    session,
+                    run.id,
+                    {"type": "run.failed", "message": str(error)},
+                )
         raise

@@ -112,6 +112,10 @@ export function getAgentRun(runId) {
   return request(`/agent-runs/${runId}`);
 }
 
+export function getAgentRunEvents(runId) {
+  return request(`/agent-runs/${runId}/events`);
+}
+
 export async function resumeAgentRunStream(runId, apiKey, tavilyApiKey, onEvent, signal) {
   const headers = { "X-DeepSeek-API-Key": apiKey };
   if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;

@@ -43,6 +43,12 @@ async def create_tables() -> None:
             ALTER TABLE messages
             ADD COLUMN IF NOT EXISTS sources JSONB NOT NULL DEFAULT '[]'::jsonb
         """))
+        await connection.execute(text("""
+            ALTER TABLE agent_runs
+            ADD COLUMN IF NOT EXISTS duration_ms INTEGER,
+            ADD COLUMN IF NOT EXISTS tool_call_count INTEGER NOT NULL DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS tool_failure_count INTEGER NOT NULL DEFAULT 0
+        """))
 
 
 async def close_database() -> None:

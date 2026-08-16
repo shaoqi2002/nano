@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   consumeEventStream,
   documentContentUrl,
+  getAgentRunEvents,
   sendMessage,
   uploadDocument,
 } from "../src/api.js";
@@ -15,6 +16,26 @@ test("builds inline and download document URLs", () => {
     documentContentUrl("doc-1", true),
     "/api/documents/doc-1/content?download=true",
   );
+});
+
+test("loads persisted agent trace events", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl;
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => [],
+    };
+  };
+
+  try {
+    assert.deepEqual(await getAgentRunEvents("run-1"), []);
+    assert.equal(requestedUrl, "/api/agent-runs/run-1/events");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("sends the selected agent mode", async () => {

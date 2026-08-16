@@ -29,6 +29,7 @@ class MessageResponse(BaseModel):
     content: str
     sources: list[RagSourceResponse] = Field(default_factory=list)
     created_at: datetime
+    run_id: UUID | None = None
 
 
 class ConversationResponse(BaseModel):
@@ -67,3 +68,19 @@ class AgentRunResponse(BaseModel):
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    duration_ms: int | None
+    tool_call_count: int
+    tool_failure_count: int
+
+
+class AgentRunEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    run_id: UUID
+    event_type: str
+    node: str | None
+    tool_name: str | None
+    duration_ms: int | None
+    payload: dict = Field(default_factory=dict)
+    created_at: datetime

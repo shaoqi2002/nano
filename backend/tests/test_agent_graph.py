@@ -6,6 +6,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from app.agent.graph import build_agent_graph, initial_agent_state, resolve_agent_mode
 from app.agent.state import ResearchPlan, ResearchTask, ReviewResult
+from app.service.agent_run import _safe_trace_value, _trace_payload
 
 
 class StructuredModel:
@@ -118,6 +119,24 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resolve_agent_mode("auto", "请深入研究这个项目"), "research")
         self.assertEqual(resolve_agent_mode("auto", "你好"), "chat")
         self.assertEqual(resolve_agent_mode("chat", "深入研究"), "chat")
+
+    def test_trace_payload_redacts_secrets_and_drops_deltas(self) -> None:
+        payload = _trace_payload({
+            "type": "tool.started",
+            "name": "example",
+            "delta": "do not persist streamed answer",
+            "input": {
+                "query": "safe",
+                "api_key": "secret-key",
+                "Authorization": "Bearer secret",
+            },
+        })
+
+        self.assertNotIn("delta", payload)
+        self.assertEqual(payload["input"]["query"], "safe")
+        self.assertEqual(payload["input"]["api_key"], "[redacted]")
+        self.assertEqual(payload["input"]["Authorization"], "[redacted]")
+        self.assertEqual(len(_safe_trace_value("x" * 3000)), 2000)
 
 
 if __name__ == "__main__":

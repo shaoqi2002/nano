@@ -26,6 +26,7 @@ from app.service.conversation import (
     get_conversations,
 )
 from app.service.agent_run import stream_new_run
+from app.repository.agent_run import get_run_ids_by_assistant_message_ids
 
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -215,7 +216,16 @@ async def read_messages(
             detail="Conversation not found",
         ) from error
 
+    run_ids = await get_run_ids_by_assistant_message_ids(
+        session, [message.id for message in messages if message.role == "assistant"]
+    )
+    responses = []
+    for message in messages:
+        response = MessageResponse.model_validate(message)
+        if message.id in run_ids:
+            response = response.model_copy(update={"run_id": run_ids[message.id]})
+        responses.append(response)
     return ConversationMessagesResponse(
         conversation_id=conversation_id,
-        messages=[MessageResponse.model_validate(message) for message in messages],
+        messages=responses,
     )

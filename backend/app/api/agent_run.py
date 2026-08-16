@@ -9,7 +9,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
-from app.schema.conversation import AgentRunResponse
+from app.schema.conversation import AgentRunEventResponse, AgentRunResponse
+from app.repository.agent_run import list_agent_run_events
 from app.service.agent_run import (
     AgentRunNotFoundError,
     get_run,
@@ -44,6 +45,18 @@ async def cancel_agent_run(run_id: UUID, session: SessionDependency) -> AgentRun
     except AgentRunNotFoundError as error:
         raise HTTPException(status_code=404, detail="Agent run not found") from error
     return AgentRunResponse.model_validate(run)
+
+
+@router.get("/{run_id}/events", response_model=list[AgentRunEventResponse])
+async def read_agent_run_events(
+    run_id: UUID, session: SessionDependency
+) -> list[AgentRunEventResponse]:
+    try:
+        await get_run(session, run_id)
+    except AgentRunNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Agent run not found") from error
+    events = await list_agent_run_events(session, run_id)
+    return [AgentRunEventResponse.model_validate(event) for event in events]
 
 
 @router.post("/{run_id}/resume/stream")

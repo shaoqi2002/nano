@@ -6,6 +6,7 @@ import {
   deleteConversation as deleteConversationRequest,
   getMessages,
   getAgentRun,
+  getAgentRunEvents,
   listConversations,
   resumeAgentRunStream,
   sendMessageStream,
@@ -43,6 +44,10 @@ const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
 const documentTarget = ref({ id: null, page: null });
 const streamController = ref(null);
 const resumableRun = ref(JSON.parse(localStorage.getItem(ACTIVE_RUN_STORAGE_KEY) || "null"));
+const traceDialogOpen = ref(false);
+const traceLoading = ref(false);
+const traceRun = ref(null);
+const traceEvents = ref([]);
 
 const activeConversation = computed(() =>
   conversations.value.find((item) => item.id === activeConversationId.value),
@@ -146,7 +151,10 @@ async function openConversation(id) {
 
   try {
     const result = await getMessages(id);
-    messages.value = result.messages;
+    messages.value = result.messages.map((message) => ({
+      ...message,
+      runId: message.run_id || null,
+    }));
     sidebarOpen.value = false;
     await scrollToBottom();
   } catch (error) {
@@ -413,6 +421,48 @@ async function copyMessage(content) {
   await navigator.clipboard.writeText(content);
 }
 
+function traceEventLabel(event) {
+  return {
+    "run.started": "任务开始",
+    "run.paused": "任务暂停",
+    "run.cancelled": "任务取消",
+    "run.failed": "任务失败",
+    "node.started": "节点开始",
+    "node.completed": "节点完成",
+    "node.failed": "节点失败",
+    "tool.started": "工具调用",
+    "tool.completed": "工具完成",
+    "tool.failed": "工具失败",
+    "plan.ready": "研究计划",
+    "review.completed": "报告审核",
+    "message.completed": "回答完成",
+  }[event.event_type] || event.event_type;
+}
+
+function formatDurationMs(value) {
+  if (value === null || value === undefined) return "—";
+  return value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(2)} s`;
+}
+
+async function openTrace(message) {
+  if (!message.runId) return;
+  traceDialogOpen.value = true;
+  traceLoading.value = true;
+  traceRun.value = null;
+  traceEvents.value = [];
+  try {
+    [traceRun.value, traceEvents.value] = await Promise.all([
+      getAgentRun(message.runId),
+      getAgentRunEvents(message.runId),
+    ]);
+  } catch (error) {
+    errorMessage.value = error.message;
+    traceDialogOpen.value = false;
+  } finally {
+    traceLoading.value = false;
+  }
+}
+
 onMounted(async () => {
   isLoading.value = true;
   try {
@@ -642,6 +692,11 @@ onMounted(async () => {
                 >
                   复制
                 </button>
+                <button
+                  v-if="message.role === 'assistant' && message.runId"
+                  class="copy-button"
+                  @click="openTrace(message)"
+                >运行详情</button>
               </div>
             </div>
           </article>
@@ -757,6 +812,41 @@ onMounted(async () => {
           </button>
         </div>
       </form>
+    </div>
+
+    <div v-if="traceDialogOpen" class="dialog-backdrop" @click.self="traceDialogOpen = false">
+      <section class="trace-dialog" aria-label="Agent 运行详情">
+        <header class="trace-dialog__header">
+          <div>
+            <h2>Agent 运行详情</h2>
+            <p v-if="traceRun">{{ traceRun.mode }} · {{ traceRun.status }}</p>
+          </div>
+          <button class="dialog-close" aria-label="关闭" @click="traceDialogOpen = false">×</button>
+        </header>
+        <div v-if="traceLoading" class="trace-loading">正在加载 Trace…</div>
+        <template v-else-if="traceRun">
+          <div class="trace-metrics">
+            <div><span>总耗时</span><strong>{{ formatDurationMs(traceRun.duration_ms) }}</strong></div>
+            <div><span>工具调用</span><strong>{{ traceRun.tool_call_count }}</strong></div>
+            <div><span>工具失败</span><strong>{{ traceRun.tool_failure_count }}</strong></div>
+            <div><span>当前节点</span><strong>{{ traceRun.current_node || "—" }}</strong></div>
+          </div>
+          <div class="trace-timeline">
+            <article v-for="event in traceEvents" :key="event.id" class="trace-event">
+              <span class="trace-event__dot" :class="{ 'trace-event__dot--failed': event.event_type.endsWith('failed') }" />
+              <div>
+                <strong>{{ traceEventLabel(event) }}</strong>
+                <span>{{ event.node || event.tool_name || "Agent" }} · {{ formatDate(event.created_at) }}</span>
+                <span v-if="event.duration_ms !== null">耗时 {{ formatDurationMs(event.duration_ms) }}</span>
+                <details v-if="Object.keys(event.payload || {}).length">
+                  <summary>查看事件数据</summary>
+                  <pre>{{ JSON.stringify(event.payload, null, 2) }}</pre>
+                </details>
+              </div>
+            </article>
+          </div>
+        </template>
+      </section>
     </div>
   </div>
 </template>
