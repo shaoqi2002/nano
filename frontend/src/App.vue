@@ -23,6 +23,8 @@ const ACTIVE_KEY = "nano-agent-active-conversation";
 const API_KEY_STORAGE_KEY = "nano-deepseek-api-key";
 const TAVILY_API_KEY_STORAGE_KEY = "nano-tavily-api-key";
 const EMBEDDING_API_KEY_STORAGE_KEY = "nano-embedding-api-key";
+const EMBEDDING_BASE_URL_STORAGE_KEY = "nano-embedding-base-url";
+const DEFAULT_EMBEDDING_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const RAG_STORAGE_KEY = "nano-rag-enabled";
 const AGENT_MODE_STORAGE_KEY = "nano-agent-mode";
 const ACTIVE_RUN_STORAGE_KEY = "nano-agent-active-run";
@@ -44,6 +46,10 @@ const tavilyApiKey = ref(localStorage.getItem(TAVILY_API_KEY_STORAGE_KEY) || "")
 const tavilyApiKeyDraft = ref("");
 const embeddingApiKey = ref(localStorage.getItem(EMBEDDING_API_KEY_STORAGE_KEY) || "");
 const embeddingApiKeyDraft = ref("");
+const embeddingBaseUrl = ref(
+  localStorage.getItem(EMBEDDING_BASE_URL_STORAGE_KEY) || DEFAULT_EMBEDDING_BASE_URL,
+);
+const embeddingBaseUrlDraft = ref(embeddingBaseUrl.value);
 const apiKeyDialogOpen = ref(false);
 const apiBalance = ref(null);
 const apiBalanceLoading = ref(false);
@@ -93,6 +99,7 @@ function openApiKeyDialog() {
   apiKeyDraft.value = apiKey.value;
   tavilyApiKeyDraft.value = tavilyApiKey.value;
   embeddingApiKeyDraft.value = embeddingApiKey.value;
+  embeddingBaseUrlDraft.value = embeddingBaseUrl.value;
   apiKeyDialogOpen.value = true;
   sidebarOpen.value = false;
   if (apiKey.value) void refreshApiBalance(apiKey.value);
@@ -173,14 +180,18 @@ function usagePercent(usage, limit) {
   return Math.min(100, Math.max(0, (usage / limit) * 100));
 }
 
-async function verifyEmbeddingKey(key = embeddingApiKey.value) {
+async function verifyEmbeddingKey(
+  key = embeddingApiKey.value,
+  baseUrl = embeddingBaseUrl.value,
+) {
   const value = key.trim();
-  if (!value) return;
+  const url = baseUrl.trim();
+  if (!value || !url) return;
   const requestId = ++embeddingStatusRequestId;
   embeddingStatusLoading.value = true;
   embeddingStatusError.value = "";
   try {
-    const status = await getEmbeddingStatus(value);
+    const status = await getEmbeddingStatus(value, url);
     if (requestId === embeddingStatusRequestId) embeddingStatus.value = status;
   } catch (error) {
     if (requestId === embeddingStatusRequestId) {
@@ -193,7 +204,10 @@ async function verifyEmbeddingKey(key = embeddingApiKey.value) {
 }
 
 function handleEmbeddingKeyDraftInput() {
-  if (embeddingApiKeyDraft.value.trim() === embeddingApiKey.value) return;
+  if (
+    embeddingApiKeyDraft.value.trim() === embeddingApiKey.value
+    && embeddingBaseUrlDraft.value.trim() === embeddingBaseUrl.value
+  ) return;
   embeddingStatusRequestId += 1;
   embeddingStatusLoading.value = false;
   embeddingStatus.value = null;
@@ -213,11 +227,13 @@ function saveApiKey() {
     localStorage.removeItem(TAVILY_API_KEY_STORAGE_KEY);
   }
   embeddingApiKey.value = embeddingApiKeyDraft.value.trim();
+  embeddingBaseUrl.value = embeddingBaseUrlDraft.value.trim() || DEFAULT_EMBEDDING_BASE_URL;
   if (embeddingApiKey.value) {
     localStorage.setItem(EMBEDDING_API_KEY_STORAGE_KEY, embeddingApiKey.value);
   } else {
     localStorage.removeItem(EMBEDDING_API_KEY_STORAGE_KEY);
   }
+  localStorage.setItem(EMBEDDING_BASE_URL_STORAGE_KEY, embeddingBaseUrl.value);
   apiKeyDialogOpen.value = false;
   errorMessage.value = "";
 }
@@ -232,9 +248,12 @@ function clearApiKey() {
   tavilyApiKeyDraft.value = "";
   embeddingApiKey.value = "";
   embeddingApiKeyDraft.value = "";
+  embeddingBaseUrl.value = DEFAULT_EMBEDDING_BASE_URL;
+  embeddingBaseUrlDraft.value = DEFAULT_EMBEDDING_BASE_URL;
   localStorage.removeItem(API_KEY_STORAGE_KEY);
   localStorage.removeItem(TAVILY_API_KEY_STORAGE_KEY);
   localStorage.removeItem(EMBEDDING_API_KEY_STORAGE_KEY);
+  localStorage.removeItem(EMBEDDING_BASE_URL_STORAGE_KEY);
   apiKeyDialogOpen.value = false;
   apiBalance.value = null;
   apiBalanceError.value = "";
@@ -533,6 +552,7 @@ async function submitMessage() {
       useRag.value,
       agentMode.value,
       embeddingApiKey.value,
+      embeddingBaseUrl.value,
       (event) => handleStreamEvent(streamingMessage, event),
       streamController.value.signal,
     );
@@ -972,6 +992,7 @@ onMounted(async () => {
       :initial-document-id="documentTarget.id"
       :initial-page="documentTarget.page"
       :embedding-api-key="embeddingApiKey"
+      :embedding-base-url="embeddingBaseUrl"
       @back="activeView = 'chat'"
     />
 
@@ -994,6 +1015,8 @@ onMounted(async () => {
             ×
           </button>
         </div>
+        <div class="api-provider-grid">
+          <section class="api-provider-panel">
         <label class="api-key-field">
           <span>DeepSeek API Key</span>
           <input
@@ -1038,6 +1061,8 @@ onMounted(async () => {
             点击刷新验证 Key 并查询余额。
           </p>
         </section>
+          </section>
+          <section class="api-provider-panel">
         <label class="api-key-field">
           <span>Tavily API Key（可选）</span>
           <input
@@ -1098,6 +1123,8 @@ onMounted(async () => {
             点击查询余量验证 Tavily Key。
           </p>
         </section>
+          </section>
+          <section class="api-provider-panel">
         <label class="api-key-field">
           <span>阿里云百炼 Embedding API Key（可选）</span>
           <input
@@ -1109,6 +1136,18 @@ onMounted(async () => {
             @input="handleEmbeddingKeyDraftInput"
           />
         </label>
+        <label class="api-key-field">
+          <span>Base URL</span>
+          <input
+            v-model="embeddingBaseUrlDraft"
+            type="url"
+            autocomplete="off"
+            placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            aria-label="阿里云百炼 Embedding Base URL"
+            @input="handleEmbeddingKeyDraftInput"
+          />
+          <small class="api-key-field__hint">API Key 与 Base URL 必须属于同一地域和服务方案</small>
+        </label>
         <section v-if="embeddingApiKeyDraft.trim()" class="api-balance-card embedding-status-card">
           <header>
             <div>
@@ -1119,7 +1158,7 @@ onMounted(async () => {
               type="button"
               class="balance-refresh"
               :disabled="embeddingStatusLoading"
-              @click="verifyEmbeddingKey(embeddingApiKeyDraft)"
+              @click="verifyEmbeddingKey(embeddingApiKeyDraft, embeddingBaseUrlDraft)"
             >{{ embeddingStatusLoading ? "验证中…" : "验证配置" }}</button>
           </header>
           <p v-if="embeddingStatusError" class="api-balance-error">{{ embeddingStatusError }}</p>
@@ -1132,6 +1171,8 @@ onMounted(async () => {
             Key 仅保存在当前浏览器；服务器环境变量仍可作为后备配置。
           </p>
         </section>
+          </section>
+        </div>
         <div class="api-key-dialog__actions">
           <button v-if="apiKey" type="button" class="danger-button" @click="clearApiKey">
             清除全部

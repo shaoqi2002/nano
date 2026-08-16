@@ -35,9 +35,16 @@ export function getTavilyUsage(apiKey) {
   });
 }
 
-export function getEmbeddingStatus(apiKey) {
+function embeddingHeaders(apiKey = "", baseUrl = "") {
+  const headers = {};
+  if (apiKey) headers["X-Embedding-API-Key"] = apiKey;
+  if (baseUrl) headers["X-Embedding-Base-URL"] = baseUrl;
+  return headers;
+}
+
+export function getEmbeddingStatus(apiKey, baseUrl = "") {
   return request("/account/embedding/status", {
-    headers: { "X-Embedding-API-Key": apiKey },
+    headers: embeddingHeaders(apiKey, baseUrl),
   });
 }
 
@@ -49,14 +56,14 @@ export function getMessages(conversationId) {
   return request(`/conversations/${conversationId}/messages`);
 }
 
-export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true, mode = "auto", embeddingApiKey = "") {
+export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true, mode = "auto", embeddingApiKey = "", embeddingBaseUrl = "") {
   const headers = {
     "X-DeepSeek-API-Key": apiKey,
   };
   if (tavilyApiKey) {
     headers["X-Tavily-API-Key"] = tavilyApiKey;
   }
-  if (embeddingApiKey) headers["X-Embedding-API-Key"] = embeddingApiKey;
+  Object.assign(headers, embeddingHeaders(embeddingApiKey, embeddingBaseUrl));
 
   return request(`/conversations/${conversationId}/messages`, {
     method: "POST",
@@ -106,6 +113,7 @@ export async function sendMessageStream(
   useRag,
   mode,
   embeddingApiKey,
+  embeddingBaseUrl,
   onEvent,
   signal,
 ) {
@@ -114,7 +122,7 @@ export async function sendMessageStream(
     "X-DeepSeek-API-Key": apiKey,
   };
   if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
-  if (embeddingApiKey) headers["X-Embedding-API-Key"] = embeddingApiKey;
+  Object.assign(headers, embeddingHeaders(embeddingApiKey, embeddingBaseUrl));
 
   const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages/stream`, {
     method: "POST",
@@ -229,19 +237,19 @@ export function deleteConversation(conversationId) {
   return request(`/conversations/${conversationId}`, { method: "DELETE" });
 }
 
-export function listDocuments(embeddingApiKey = "") {
+export function listDocuments(embeddingApiKey = "", embeddingBaseUrl = "") {
   return request("/documents", {
-    headers: embeddingApiKey ? { "X-Embedding-API-Key": embeddingApiKey } : {},
+    headers: embeddingHeaders(embeddingApiKey, embeddingBaseUrl),
   });
 }
 
-export function uploadDocument(file, embeddingApiKey = "") {
+export function uploadDocument(file, embeddingApiKey = "", embeddingBaseUrl = "") {
   const body = new FormData();
   body.append("file", file);
   return request("/documents", {
     method: "POST",
     body,
-    headers: embeddingApiKey ? { "X-Embedding-API-Key": embeddingApiKey } : {},
+    headers: embeddingHeaders(embeddingApiKey, embeddingBaseUrl),
   });
 }
 
@@ -249,10 +257,10 @@ export function deleteDocument(documentId) {
   return request(`/documents/${documentId}`, { method: "DELETE" });
 }
 
-export function reindexDocument(documentId, embeddingApiKey = "") {
+export function reindexDocument(documentId, embeddingApiKey = "", embeddingBaseUrl = "") {
   return request(`/documents/${documentId}/reindex`, {
     method: "POST",
-    headers: embeddingApiKey ? { "X-Embedding-API-Key": embeddingApiKey } : {},
+    headers: embeddingHeaders(embeddingApiKey, embeddingBaseUrl),
   });
 }
 

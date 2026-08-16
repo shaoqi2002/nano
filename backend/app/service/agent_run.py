@@ -186,6 +186,7 @@ async def stream_new_run(
     api_key: str,
     tavily_api_key: str | None,
     embedding_api_key: str | None,
+    embedding_base_url: str | None,
     use_rag: bool,
     requested_mode: str,
     checkpointer: Any,
@@ -215,7 +216,7 @@ async def stream_new_run(
         try:
             async with session.begin():
                 sources = await retrieve_sources(
-                    session, content, embedding_api_key
+                    session, content, embedding_api_key, embedding_base_url
                 )
         except (EmbeddingConfigurationError, EmbeddingServiceError):
             rag_error = "文档检索暂时不可用"

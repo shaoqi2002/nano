@@ -1081,7 +1081,7 @@ button {
 }
 
 .api-key-dialog {
-  width: min(460px, 100%);
+  width: min(880px, 100%);
   max-height: min(900px, 92vh);
   padding: 22px;
   overflow-y: auto;
@@ -1089,6 +1089,41 @@ button {
   border-radius: 16px;
   background: #252525;
   box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+}
+
+.api-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.api-provider-panel {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #393939;
+  border-radius: 13px;
+  background: #212121;
+}
+
+.api-provider-panel > .api-key-field:first-child {
+  margin-top: 0;
+}
+
+.api-provider-panel:last-child {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.api-provider-panel:last-child > .api-key-field {
+  margin-top: 0;
+}
+
+.api-provider-panel:last-child > .api-balance-card {
+  grid-column: 1 / -1;
 }
 
 .api-key-dialog__header {
@@ -1130,6 +1165,12 @@ button {
   margin-top: 14px;
   color: #bbb;
   font-size: 13px;
+}
+
+.api-key-field__hint {
+  color: #777;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .api-balance-card {
@@ -1389,6 +1430,19 @@ button {
 }
 
 @media (max-width: 760px) {
+  .api-provider-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .api-provider-panel:last-child {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .api-provider-panel:last-child > .api-key-field + .api-key-field {
+    margin-top: 14px;
+  }
+
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;

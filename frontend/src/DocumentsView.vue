@@ -17,6 +17,7 @@ const props = defineProps({
   initialDocumentId: { type: String, default: null },
   initialPage: { type: Number, default: null },
   embeddingApiKey: { type: String, default: "" },
+  embeddingBaseUrl: { type: String, default: "" },
 });
 const documents = ref([]);
 const activeDocumentId = ref(null);
@@ -83,7 +84,9 @@ async function loadDocuments(background = false) {
   if (!background) isLoading.value = true;
   errorMessage.value = "";
   try {
-    documents.value = await listDocuments(props.embeddingApiKey);
+    documents.value = await listDocuments(
+      props.embeddingApiKey, props.embeddingBaseUrl
+    );
     if (!targetApplied && props.initialDocumentId && documents.value.some((item) => item.id === props.initialDocumentId)) {
       activeDocumentId.value = props.initialDocumentId;
       targetApplied = true;
@@ -103,7 +106,7 @@ async function reindexActiveDocument() {
   errorMessage.value = "";
   try {
     const updated = await reindexDocument(
-      activeDocument.value.id, props.embeddingApiKey
+      activeDocument.value.id, props.embeddingApiKey, props.embeddingBaseUrl
     );
     const index = documents.value.findIndex((item) => item.id === updated.id);
     if (index >= 0) documents.value[index] = updated;
@@ -121,7 +124,9 @@ async function handleUpload(event) {
   isUploading.value = true;
   errorMessage.value = "";
   try {
-    const document = await uploadDocument(file, props.embeddingApiKey);
+    const document = await uploadDocument(
+      file, props.embeddingApiKey, props.embeddingBaseUrl
+    );
     documents.value.unshift(document);
     activeDocumentId.value = document.id;
   } catch (error) {

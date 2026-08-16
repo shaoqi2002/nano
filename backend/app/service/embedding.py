@@ -1,4 +1,5 @@
 from typing import Sequence
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -20,22 +21,52 @@ class EmbeddingServiceError(RuntimeError):
     pass
 
 
-def embedding_is_configured(api_key: str | None = None) -> bool:
-    return bool((api_key or EMBEDDING_API_KEY).strip() and EMBEDDING_BASE_URL.strip())
+def resolve_embedding_base_url(base_url: str | None = None) -> str:
+    resolved = (base_url or EMBEDDING_BASE_URL).strip().rstrip("/")
+    parsed = urlsplit(resolved)
+    hostname = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or not (hostname == "aliyuncs.com" or hostname.endswith(".aliyuncs.com"))
+    ):
+        raise EmbeddingConfigurationError(
+            "Embedding Base URL 必须是 aliyuncs.com 域名下的 HTTPS 地址"
+        )
+    return resolved
+
+
+def embedding_is_configured(
+    api_key: str | None = None, base_url: str | None = None
+) -> bool:
+    if not (api_key or EMBEDDING_API_KEY).strip():
+        return False
+    try:
+        resolve_embedding_base_url(base_url)
+    except EmbeddingConfigurationError:
+        return False
+    return True
 
 
 async def embed_texts(
-    texts: Sequence[str], api_key: str | None = None
+    texts: Sequence[str],
+    api_key: str | None = None,
+    base_url: str | None = None,
 ) -> list[list[float]]:
     if not texts:
         return []
     resolved_api_key = (api_key or EMBEDDING_API_KEY).strip()
-    if not embedding_is_configured(resolved_api_key):
+    if not resolved_api_key:
         raise EmbeddingConfigurationError("尚未配置 EMBEDDING_API_KEY")
 
+    resolved_base_url = resolve_embedding_base_url(base_url)
     vectors: list[list[float]] = []
     batch_size = max(1, EMBEDDING_BATCH_SIZE)
-    url = f"{EMBEDDING_BASE_URL.rstrip('/')}/embeddings"
+    url = f"{resolved_base_url}/embeddings"
     headers = {"Authorization": f"Bearer {resolved_api_key}"}
 
     async with httpx.AsyncClient(timeout=EMBEDDING_TIMEOUT_SECONDS) as client:

@@ -53,13 +53,16 @@ async def read_documents(
     embedding_api_key: Annotated[
         str | None, Header(alias="X-Embedding-API-Key", min_length=1)
     ] = None,
+    embedding_base_url: Annotated[
+        str | None, Header(alias="X-Embedding-Base-URL", min_length=1, max_length=500)
+    ] = None,
 ) -> list[DocumentResponse]:
     documents = await get_documents(session)
     if embedding_api_key:
         for document in documents:
             if document.index_status == "pending":
                 request.app.state.document_index_requests.submit(
-                    document.id, embedding_api_key
+                    document.id, embedding_api_key, embedding_base_url
                 )
     return [DocumentResponse.model_validate(document) for document in documents]
 
@@ -72,6 +75,9 @@ async def upload_document(
     embedding_api_key: Annotated[
         str | None, Header(alias="X-Embedding-API-Key", min_length=1)
     ] = None,
+    embedding_base_url: Annotated[
+        str | None, Header(alias="X-Embedding-Base-URL", min_length=1, max_length=500)
+    ] = None,
 ) -> DocumentResponse:
     try:
         document = await create_document(session, file)
@@ -82,7 +88,7 @@ async def upload_document(
     finally:
         await file.close()
     request.app.state.document_index_requests.submit(
-        document.id, embedding_api_key
+        document.id, embedding_api_key, embedding_base_url
     )
     return DocumentResponse.model_validate(document)
 
@@ -159,6 +165,9 @@ async def reindex_document_endpoint(
     embedding_api_key: Annotated[
         str | None, Header(alias="X-Embedding-API-Key", min_length=1)
     ] = None,
+    embedding_base_url: Annotated[
+        str | None, Header(alias="X-Embedding-Base-URL", min_length=1, max_length=500)
+    ] = None,
 ) -> DocumentResponse:
     try:
         document = await reindex_document(session, document_id)
@@ -167,6 +176,6 @@ async def reindex_document_endpoint(
     except InvalidDocumentError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     request.app.state.document_index_requests.submit(
-        document.id, embedding_api_key
+        document.id, embedding_api_key, embedding_base_url
     )
     return DocumentResponse.model_validate(document)

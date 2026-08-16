@@ -54,10 +54,15 @@ async def read_embedding_status(
     api_key: Annotated[
         str, Header(alias="X-Embedding-API-Key", min_length=1)
     ],
+    base_url: Annotated[
+        str | None, Header(alias="X-Embedding-Base-URL", min_length=1, max_length=500)
+    ] = None,
 ) -> EmbeddingStatusResponse:
     try:
-        await embed_texts(["Nano embedding configuration check"], api_key)
-    except (EmbeddingConfigurationError, EmbeddingServiceError) as error:
+        await embed_texts(["Nano embedding configuration check"], api_key, base_url)
+    except EmbeddingConfigurationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except EmbeddingServiceError as error:
         raise HTTPException(
             status_code=502, detail="百炼 Embedding Key 验证失败"
         ) from error

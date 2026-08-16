@@ -16,12 +16,26 @@ from app.service.document import (
 )
 from app.service.document_cache import DocumentCache, DocumentCacheError
 from app.service.document_indexer import DocumentIndexRequests
-from app.service.embedding import embedding_is_configured
+from app.service.embedding import (
+    EmbeddingConfigurationError,
+    embedding_is_configured,
+    resolve_embedding_base_url,
+)
 
 
 class DocumentServiceTests(unittest.TestCase):
     def test_browser_embedding_key_can_configure_indexing(self) -> None:
         self.assertTrue(embedding_is_configured("browser-key"))
+
+    def test_accepts_bailian_workspace_base_url(self) -> None:
+        base_url = (
+            "https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/"
+        )
+        self.assertEqual(resolve_embedding_base_url(base_url), base_url.rstrip("/"))
+
+    def test_rejects_non_bailian_base_url(self) -> None:
+        with self.assertRaises(EmbeddingConfigurationError):
+            resolve_embedding_base_url("http://127.0.0.1:8000/v1")
 
     def test_index_requests_deduplicate_document_keys(self) -> None:
         requests = DocumentIndexRequests()
@@ -29,8 +43,23 @@ class DocumentServiceTests(unittest.TestCase):
         requests.submit(document_id, "first-key")
         requests.submit(document_id, "latest-key")
 
-        self.assertEqual(requests.take(), (document_id, "latest-key"))
+        self.assertEqual(requests.take(), (document_id, "latest-key", None))
         self.assertIsNone(requests.take())
+
+    def test_index_requests_keep_base_url_in_memory(self) -> None:
+        requests = DocumentIndexRequests()
+        document_id = UUID("00000000-0000-0000-0000-000000000001")
+        requests.submit(
+            document_id,
+            "browser-key",
+            "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+        )
+
+        self.assertEqual(requests.take(), (
+            document_id,
+            "browser-key",
+            "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+        ))
 
     def test_safe_filename_removes_client_paths(self) -> None:
         self.assertEqual(safe_filename("C:\\fakepath\\报告.pdf"), "报告.pdf")

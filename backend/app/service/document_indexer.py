@@ -21,17 +21,25 @@ class DocumentIndexRequests:
     """Keep per-document browser keys in memory without persisting secrets."""
 
     def __init__(self) -> None:
-        self._keys: dict[UUID, str] = {}
+        self._configurations: dict[UUID, tuple[str | None, str | None]] = {}
 
-    def submit(self, document_id: UUID, api_key: str | None) -> None:
-        if api_key and api_key.strip():
-            self._keys[document_id] = api_key.strip()
+    def submit(
+        self,
+        document_id: UUID,
+        api_key: str | None,
+        base_url: str | None = None,
+    ) -> None:
+        normalized_key = api_key.strip() if api_key and api_key.strip() else None
+        normalized_url = base_url.strip() if base_url and base_url.strip() else None
+        if normalized_key or normalized_url:
+            self._configurations[document_id] = (normalized_key, normalized_url)
 
-    def take(self) -> tuple[UUID, str] | None:
-        if not self._keys:
+    def take(self) -> tuple[UUID, str | None, str | None] | None:
+        if not self._configurations:
             return None
-        document_id = next(iter(self._keys))
-        return document_id, self._keys.pop(document_id)
+        document_id = next(iter(self._configurations))
+        api_key, base_url = self._configurations.pop(document_id)
+        return document_id, api_key, base_url
 
 
 async def reset_interrupted_jobs() -> None:
@@ -75,7 +83,9 @@ async def _set_failed(document_id: UUID, error: Exception) -> None:
 
 
 async def _process_document(
-    document_id: UUID, api_key: str | None = None
+    document_id: UUID,
+    api_key: str | None = None,
+    base_url: str | None = None,
 ) -> None:
     async with SessionLocal() as session:
         document = await session.get(Document, document_id)
@@ -84,7 +94,9 @@ async def _process_document(
         path = await run_in_threadpool(cached_document_path, document)
         chunks = await run_in_threadpool(parse_document_chunks, document, path)
 
-    vectors = await embed_texts([chunk.content for chunk in chunks], api_key)
+    vectors = await embed_texts(
+        [chunk.content for chunk in chunks], api_key, base_url
+    )
     async with SessionLocal() as session, session.begin():
         document = await session.get(Document, document_id, with_for_update=True)
         if document is None:
@@ -124,11 +136,13 @@ async def indexing_worker(
     while not stop_event.is_set():
         submitted = requests.take()
         if submitted:
-            requested_id, requested_key = submitted
+            requested_id, requested_key, requested_url = submitted
             document_id = await _claim_document(requested_id)
             if document_id:
                 try:
-                    await _process_document(document_id, requested_key)
+                    await _process_document(
+                        document_id, requested_key, requested_url
+                    )
                 except Exception as error:
                     await _set_failed(document_id, error)
                 continue

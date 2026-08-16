@@ -86,6 +86,10 @@ async def create_message(
         str | None,
         Header(alias="X-Embedding-API-Key", min_length=1),
     ] = None,
+    embedding_base_url: Annotated[
+        str | None,
+        Header(alias="X-Embedding-Base-URL", min_length=1, max_length=500),
+    ] = None,
 ) -> SendMessageResponse:
     try:
         assistant_payload: dict | None = None
@@ -96,6 +100,7 @@ async def create_message(
             api_key=api_key,
             tavily_api_key=tavily_api_key,
             embedding_api_key=embedding_api_key,
+            embedding_base_url=embedding_base_url,
             use_rag=request.use_rag,
             requested_mode=request.mode,
             checkpointer=http_request.app.state.agent_checkpointer,
@@ -138,6 +143,10 @@ async def create_message_stream(
         str | None,
         Header(alias="X-Embedding-API-Key", min_length=1),
     ] = None,
+    embedding_base_url: Annotated[
+        str | None,
+        Header(alias="X-Embedding-Base-URL", min_length=1, max_length=500),
+    ] = None,
 ) -> StreamingResponse:
     async def generate():
         stream = stream_new_run(
@@ -147,6 +156,7 @@ async def create_message_stream(
             api_key=api_key,
             tavily_api_key=tavily_api_key,
             embedding_api_key=embedding_api_key,
+            embedding_base_url=embedding_base_url,
             use_rag=request.use_rag,
             requested_mode=request.mode,
             checkpointer=http_request.app.state.agent_checkpointer,

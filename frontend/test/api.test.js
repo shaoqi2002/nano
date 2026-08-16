@@ -82,9 +82,16 @@ test("validates the browser-configured embedding key", async () => {
   };
 
   try {
-    await getEmbeddingStatus("sk-embedding");
+    await getEmbeddingStatus(
+      "sk-embedding",
+      "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+    );
     assert.equal(captured.url, "/api/account/embedding/status");
     assert.equal(captured.options.headers["X-Embedding-API-Key"], "sk-embedding");
+    assert.equal(
+      captured.options.headers["X-Embedding-Base-URL"],
+      "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -214,7 +221,7 @@ test("sends the selected agent mode", async () => {
   try {
     await sendMessage(
       "conversation-1", "research this", "sk-test", "", true, "research",
-      "sk-embedding",
+      "sk-embedding", "https://dashscope.aliyuncs.com/compatible-mode/v1",
     );
     assert.deepEqual(JSON.parse(capturedOptions.body), {
       message: "research this",
@@ -222,6 +229,10 @@ test("sends the selected agent mode", async () => {
       mode: "research",
     });
     assert.equal(capturedOptions.headers["X-Embedding-API-Key"], "sk-embedding");
+    assert.equal(
+      capturedOptions.headers["X-Embedding-Base-URL"],
+      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -241,10 +252,18 @@ test("uploads documents as multipart data without a JSON content type", async ()
 
   try {
     const file = new Blob(["hello"], { type: "text/plain" });
-    await uploadDocument(file, "sk-embedding");
+    await uploadDocument(
+      file,
+      "sk-embedding",
+      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    );
     assert.ok(capturedOptions.body instanceof FormData);
     assert.equal(capturedOptions.headers["Content-Type"], undefined);
     assert.equal(capturedOptions.headers["X-Embedding-API-Key"], "sk-embedding");
+    assert.equal(
+      capturedOptions.headers["X-Embedding-Base-URL"],
+      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
