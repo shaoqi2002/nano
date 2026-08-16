@@ -9,6 +9,7 @@ import {
   getAgentRunEvents,
   getDeepSeekBalance,
   getEvalDataset,
+  getTavilyUsage,
   sendMessage,
   runEvalStream,
   restorePresetEvalCases,
@@ -41,6 +42,27 @@ test("queries DeepSeek balance through the backend", async () => {
     await getDeepSeekBalance("sk-balance");
     assert.equal(captured.url, "/api/account/deepseek/balance");
     assert.equal(captured.options.headers["X-DeepSeek-API-Key"], "sk-balance");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("queries Tavily usage through the backend", async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ key: { usage: 10, limit: 1000 }, account: {} }),
+    };
+  };
+
+  try {
+    await getTavilyUsage("tvly-usage");
+    assert.equal(captured.url, "/api/account/tavily/usage");
+    assert.equal(captured.options.headers["X-Tavily-API-Key"], "tvly-usage");
   } finally {
     globalThis.fetch = originalFetch;
   }

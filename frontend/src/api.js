@@ -29,6 +29,12 @@ export function getDeepSeekBalance(apiKey) {
   });
 }
 
+export function getTavilyUsage(apiKey) {
+  return request("/account/tavily/usage", {
+    headers: { "X-Tavily-API-Key": apiKey },
+  });
+}
+
 export function listConversations() {
   return request("/conversations");
 }

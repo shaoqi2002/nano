@@ -282,20 +282,6 @@ button {
   color: #ddd;
 }
 
-.sidebar__footer-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.sidebar__footer-copy small {
-  overflow: hidden;
-  color: #6f998f;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .status-dot {
   width: 7px;
   height: 7px;
@@ -306,11 +292,6 @@ button {
 .status-dot--configured {
   background: #10a37f;
   box-shadow: 0 0 0 3px rgb(16 163 127 / 12%);
-}
-
-.status-dot--unavailable {
-  background: #d96c6c;
-  box-shadow: 0 0 0 3px rgb(217 108 108 / 12%);
 }
 
 .chat-panel {
@@ -1249,6 +1230,67 @@ button {
 
 .api-key-dialog .api-balance-placeholder {
   color: #78938d;
+}
+
+.tavily-usage-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tavily-usage-list article {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #34413e;
+}
+
+.tavily-usage-list article > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.tavily-usage-list article span,
+.tavily-usage-list article small,
+.tavily-usage-breakdown span {
+  color: #78938d;
+  font-size: 9px;
+}
+
+.tavily-usage-list article strong {
+  color: #d9e9e5;
+  font-size: 12px;
+}
+
+.tavily-usage-list article small {
+  grid-column: 1 / -1;
+}
+
+.usage-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #34413e;
+}
+
+.usage-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #65b6a2;
+}
+
+.tavily-usage-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tavily-usage-breakdown span {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #293633;
 }
 
 .dialog-close,

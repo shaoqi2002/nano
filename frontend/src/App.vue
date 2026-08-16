@@ -8,6 +8,7 @@ import {
   getAgentRunEvents,
   getDeepSeekBalance,
   getMessages,
+  getTavilyUsage,
   listConversations,
   resumeAgentRunStream,
   sendMessageStream,
@@ -44,6 +45,10 @@ const apiBalance = ref(null);
 const apiBalanceLoading = ref(false);
 const apiBalanceError = ref("");
 let apiBalanceRequestId = 0;
+const tavilyUsage = ref(null);
+const tavilyUsageLoading = ref(false);
+const tavilyUsageError = ref("");
+let tavilyUsageRequestId = 0;
 const deletingConversationId = ref(null);
 const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
 const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
@@ -63,11 +68,6 @@ const canSend = computed(
   () => draft.value.trim().length > 0 && !isSending.value && activeConversationId.value,
 );
 
-const apiBalanceSummary = computed(() => {
-  const infos = apiBalance.value?.balance_infos || [];
-  return infos.map((info) => formatBalance(info.total_balance, info.currency)).join(" / ");
-});
-
 function rememberActiveConversation(id) {
   activeConversationId.value = id;
   localStorage.setItem(ACTIVE_KEY, id);
@@ -79,6 +79,7 @@ function openApiKeyDialog() {
   apiKeyDialogOpen.value = true;
   sidebarOpen.value = false;
   if (apiKey.value) void refreshApiBalance(apiKey.value);
+  if (tavilyApiKey.value) void refreshTavilyUsage(tavilyApiKey.value);
 }
 
 function formatBalance(value, currency) {
@@ -123,6 +124,38 @@ function handleApiKeyDraftInput() {
   apiBalanceError.value = "";
 }
 
+async function refreshTavilyUsage(key = tavilyApiKey.value) {
+  const value = key.trim();
+  if (!value) return;
+  const requestId = ++tavilyUsageRequestId;
+  tavilyUsageLoading.value = true;
+  tavilyUsageError.value = "";
+  try {
+    const usage = await getTavilyUsage(value);
+    if (requestId === tavilyUsageRequestId) tavilyUsage.value = usage;
+  } catch (error) {
+    if (requestId === tavilyUsageRequestId) {
+      tavilyUsage.value = null;
+      tavilyUsageError.value = error.message;
+    }
+  } finally {
+    if (requestId === tavilyUsageRequestId) tavilyUsageLoading.value = false;
+  }
+}
+
+function handleTavilyKeyDraftInput() {
+  if (tavilyApiKeyDraft.value.trim() === tavilyApiKey.value) return;
+  tavilyUsageRequestId += 1;
+  tavilyUsageLoading.value = false;
+  tavilyUsage.value = null;
+  tavilyUsageError.value = "";
+}
+
+function usagePercent(usage, limit) {
+  if (!limit) return 0;
+  return Math.min(100, Math.max(0, (usage / limit) * 100));
+}
+
 function saveApiKey() {
   const value = apiKeyDraft.value.trim();
   if (!value) return;
@@ -137,11 +170,11 @@ function saveApiKey() {
   }
   apiKeyDialogOpen.value = false;
   errorMessage.value = "";
-  void refreshApiBalance(value);
 }
 
 function clearApiKey() {
   apiBalanceRequestId += 1;
+  tavilyUsageRequestId += 1;
   apiKey.value = "";
   apiKeyDraft.value = "";
   tavilyApiKey.value = "";
@@ -151,6 +184,8 @@ function clearApiKey() {
   apiKeyDialogOpen.value = false;
   apiBalance.value = null;
   apiBalanceError.value = "";
+  tavilyUsage.value = null;
+  tavilyUsageError.value = "";
 }
 
 function formatDate(value) {
@@ -382,7 +417,6 @@ function handleStreamEvent(message, event) {
     });
     resumableRun.value = null;
     localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
-    if (apiKey.value) void refreshApiBalance(apiKey.value);
   } else if (event.type === "message.failed") {
     throw new Error(event.message || "生成回答失败");
   }
@@ -563,7 +597,6 @@ async function openTrace(message) {
 }
 
 onMounted(async () => {
-  if (apiKey.value) void refreshApiBalance(apiKey.value);
   isLoading.value = true;
   try {
     conversations.value = (await listConversations()).map((conversation) => ({
@@ -696,19 +729,8 @@ onMounted(async () => {
       </nav>
 
       <button class="sidebar__footer" @click="openApiKeyDialog">
-        <span
-          class="status-dot"
-          :class="{
-            'status-dot--configured': apiKey && apiBalance?.is_available !== false,
-            'status-dot--unavailable': apiBalance?.is_available === false,
-          }"
-        />
-        <span class="sidebar__footer-copy">
-          <span>{{ apiKey && tavilyApiKey ? "API Keys 已配置" : apiKey ? "DeepSeek 已配置" : "设置 API Key" }}</span>
-          <small v-if="apiBalanceSummary">余额 {{ apiBalanceSummary }}</small>
-          <small v-else-if="apiBalanceLoading">正在查询余额…</small>
-          <small v-else-if="apiBalanceError && apiKey">余额查询失败</small>
-        </span>
+        <span class="status-dot" :class="{ 'status-dot--configured': apiKey }" />
+        <span>{{ apiKey && tavilyApiKey ? "API Keys 已配置" : apiKey ? "DeepSeek 已配置" : "设置 API Key" }}</span>
       </button>
     </aside>
 
@@ -966,8 +988,58 @@ onMounted(async () => {
             autocomplete="off"
             placeholder="tvly-..."
             aria-label="Tavily API Key"
+            @input="handleTavilyKeyDraftInput"
           />
         </label>
+        <section v-if="tavilyApiKeyDraft.trim()" class="api-balance-card tavily-usage-card">
+          <header>
+            <div>
+              <strong>Tavily Credits</strong>
+              <small v-if="tavilyUsage">{{ tavilyUsage.account.current_plan }} 套餐</small>
+              <small v-else>API Key 与账户用量</small>
+            </div>
+            <button
+              type="button"
+              class="balance-refresh"
+              :disabled="tavilyUsageLoading"
+              @click="refreshTavilyUsage(tavilyApiKeyDraft)"
+            >{{ tavilyUsageLoading ? "查询中…" : "查询余量" }}</button>
+          </header>
+          <p v-if="tavilyUsageError" class="api-balance-error">{{ tavilyUsageError }}</p>
+          <div v-else-if="tavilyUsage" class="tavily-usage-list">
+            <article>
+              <div>
+                <span>当前 Key</span>
+                <strong>{{ Math.max(0, tavilyUsage.key.limit - tavilyUsage.key.usage) }} credits 剩余</strong>
+                <small>{{ tavilyUsage.key.usage }} / {{ tavilyUsage.key.limit }} 已用</small>
+              </div>
+              <div class="usage-track">
+                <span :style="{ width: `${usagePercent(tavilyUsage.key.usage, tavilyUsage.key.limit)}%` }" />
+              </div>
+            </article>
+            <article>
+              <div>
+                <span>账户套餐</span>
+                <strong>{{ Math.max(0, tavilyUsage.account.plan_limit - tavilyUsage.account.plan_usage) }} credits 剩余</strong>
+                <small>{{ tavilyUsage.account.plan_usage }} / {{ tavilyUsage.account.plan_limit }} 已用</small>
+              </div>
+              <div class="usage-track">
+                <span :style="{ width: `${usagePercent(tavilyUsage.account.plan_usage, tavilyUsage.account.plan_limit)}%` }" />
+              </div>
+            </article>
+            <div class="tavily-usage-breakdown">
+              <span>Search {{ tavilyUsage.key.search_usage }}</span>
+              <span>Extract {{ tavilyUsage.key.extract_usage }}</span>
+              <span>Research {{ tavilyUsage.key.research_usage }}</span>
+              <span v-if="tavilyUsage.account.paygo_limit">
+                PayGo {{ tavilyUsage.account.paygo_usage }}/{{ tavilyUsage.account.paygo_limit }}
+              </span>
+            </div>
+          </div>
+          <p v-else-if="!tavilyUsageLoading" class="api-balance-placeholder">
+            点击查询余量验证 Tavily Key。
+          </p>
+        </section>
         <div class="api-key-dialog__actions">
           <button v-if="apiKey" type="button" class="danger-button" @click="clearApiKey">
             清除全部
