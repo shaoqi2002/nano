@@ -23,6 +23,12 @@ export function createConversation() {
   return request("/conversations", { method: "POST" });
 }
 
+export function getDeepSeekBalance(apiKey) {
+  return request("/account/deepseek/balance", {
+    headers: { "X-DeepSeek-API-Key": apiKey },
+  });
+}
+
 export function listConversations() {
   return request("/conversations");
 }

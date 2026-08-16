@@ -4,9 +4,10 @@ import { computed, nextTick, onMounted, reactive, ref } from "vue";
 import {
   createConversation,
   deleteConversation as deleteConversationRequest,
-  getMessages,
   getAgentRun,
   getAgentRunEvents,
+  getDeepSeekBalance,
+  getMessages,
   listConversations,
   resumeAgentRunStream,
   sendMessageStream,
@@ -39,6 +40,10 @@ const apiKeyDraft = ref("");
 const tavilyApiKey = ref(localStorage.getItem(TAVILY_API_KEY_STORAGE_KEY) || "");
 const tavilyApiKeyDraft = ref("");
 const apiKeyDialogOpen = ref(false);
+const apiBalance = ref(null);
+const apiBalanceLoading = ref(false);
+const apiBalanceError = ref("");
+let apiBalanceRequestId = 0;
 const deletingConversationId = ref(null);
 const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
 const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
@@ -58,6 +63,11 @@ const canSend = computed(
   () => draft.value.trim().length > 0 && !isSending.value && activeConversationId.value,
 );
 
+const apiBalanceSummary = computed(() => {
+  const infos = apiBalance.value?.balance_infos || [];
+  return infos.map((info) => formatBalance(info.total_balance, info.currency)).join(" / ");
+});
+
 function rememberActiveConversation(id) {
   activeConversationId.value = id;
   localStorage.setItem(ACTIVE_KEY, id);
@@ -68,6 +78,49 @@ function openApiKeyDialog() {
   tavilyApiKeyDraft.value = tavilyApiKey.value;
   apiKeyDialogOpen.value = true;
   sidebarOpen.value = false;
+  if (apiKey.value) void refreshApiBalance(apiKey.value);
+}
+
+function formatBalance(value, currency) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return `${value} ${currency}`;
+  try {
+    return new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
+async function refreshApiBalance(key = apiKey.value) {
+  const value = key.trim();
+  if (!value) return;
+  const requestId = ++apiBalanceRequestId;
+  apiBalanceLoading.value = true;
+  apiBalanceError.value = "";
+  try {
+    const balance = await getDeepSeekBalance(value);
+    if (requestId === apiBalanceRequestId) apiBalance.value = balance;
+  } catch (error) {
+    if (requestId === apiBalanceRequestId) {
+      apiBalance.value = null;
+      apiBalanceError.value = error.message;
+    }
+  } finally {
+    if (requestId === apiBalanceRequestId) apiBalanceLoading.value = false;
+  }
+}
+
+function handleApiKeyDraftInput() {
+  if (apiKeyDraft.value.trim() === apiKey.value) return;
+  apiBalanceRequestId += 1;
+  apiBalanceLoading.value = false;
+  apiBalance.value = null;
+  apiBalanceError.value = "";
 }
 
 function saveApiKey() {
@@ -84,9 +137,11 @@ function saveApiKey() {
   }
   apiKeyDialogOpen.value = false;
   errorMessage.value = "";
+  void refreshApiBalance(value);
 }
 
 function clearApiKey() {
+  apiBalanceRequestId += 1;
   apiKey.value = "";
   apiKeyDraft.value = "";
   tavilyApiKey.value = "";
@@ -94,6 +149,8 @@ function clearApiKey() {
   localStorage.removeItem(API_KEY_STORAGE_KEY);
   localStorage.removeItem(TAVILY_API_KEY_STORAGE_KEY);
   apiKeyDialogOpen.value = false;
+  apiBalance.value = null;
+  apiBalanceError.value = "";
 }
 
 function formatDate(value) {
@@ -325,6 +382,7 @@ function handleStreamEvent(message, event) {
     });
     resumableRun.value = null;
     localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+    if (apiKey.value) void refreshApiBalance(apiKey.value);
   } else if (event.type === "message.failed") {
     throw new Error(event.message || "生成回答失败");
   }
@@ -505,6 +563,7 @@ async function openTrace(message) {
 }
 
 onMounted(async () => {
+  if (apiKey.value) void refreshApiBalance(apiKey.value);
   isLoading.value = true;
   try {
     conversations.value = (await listConversations()).map((conversation) => ({
@@ -637,8 +696,19 @@ onMounted(async () => {
       </nav>
 
       <button class="sidebar__footer" @click="openApiKeyDialog">
-        <span class="status-dot" :class="{ 'status-dot--configured': apiKey }" />
-        <span>{{ apiKey && tavilyApiKey ? "API Keys 已配置" : apiKey ? "DeepSeek 已配置" : "设置 API Key" }}</span>
+        <span
+          class="status-dot"
+          :class="{
+            'status-dot--configured': apiKey && apiBalance?.is_available !== false,
+            'status-dot--unavailable': apiBalance?.is_available === false,
+          }"
+        />
+        <span class="sidebar__footer-copy">
+          <span>{{ apiKey && tavilyApiKey ? "API Keys 已配置" : apiKey ? "DeepSeek 已配置" : "设置 API Key" }}</span>
+          <small v-if="apiBalanceSummary">余额 {{ apiBalanceSummary }}</small>
+          <small v-else-if="apiBalanceLoading">正在查询余额…</small>
+          <small v-else-if="apiBalanceError && apiKey">余额查询失败</small>
+        </span>
       </button>
     </aside>
 
@@ -853,8 +923,41 @@ onMounted(async () => {
             placeholder="sk-..."
             aria-label="DeepSeek API Key"
             autofocus
+            @input="handleApiKeyDraftInput"
           />
         </label>
+        <section v-if="apiKeyDraft.trim()" class="api-balance-card">
+          <header>
+            <div>
+              <strong>DeepSeek 账户余额</strong>
+              <small>该 API Key 所属账户</small>
+            </div>
+            <button
+              type="button"
+              class="balance-refresh"
+              :disabled="apiBalanceLoading"
+              @click="refreshApiBalance(apiKeyDraft)"
+            >{{ apiBalanceLoading ? "查询中…" : "刷新" }}</button>
+          </header>
+          <p v-if="apiBalanceError" class="api-balance-error">{{ apiBalanceError }}</p>
+          <div v-else-if="apiBalance?.balance_infos?.length" class="api-balance-list">
+            <article v-for="info in apiBalance.balance_infos" :key="info.currency">
+              <span>{{ info.currency }}</span>
+              <strong>{{ formatBalance(info.total_balance, info.currency) }}</strong>
+              <small>
+                充值 {{ formatBalance(info.topped_up_balance, info.currency) }}
+                · 赠金 {{ formatBalance(info.granted_balance, info.currency) }}
+              </small>
+            </article>
+            <span
+              class="api-balance-status"
+              :class="{ 'api-balance-status--unavailable': !apiBalance.is_available }"
+            >{{ apiBalance.is_available ? "可正常调用" : "余额不足" }}</span>
+          </div>
+          <p v-else-if="!apiBalanceLoading" class="api-balance-placeholder">
+            点击刷新验证 Key 并查询余额。
+          </p>
+        </section>
         <label class="api-key-field">
           <span>Tavily API Key（可选）</span>
           <input

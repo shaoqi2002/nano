@@ -7,6 +7,7 @@ import {
   deleteEvalCase,
   documentContentUrl,
   getAgentRunEvents,
+  getDeepSeekBalance,
   getEvalDataset,
   sendMessage,
   runEvalStream,
@@ -22,6 +23,27 @@ test("builds inline and download document URLs", () => {
     documentContentUrl("doc-1", true),
     "/api/documents/doc-1/content?download=true",
   );
+});
+
+test("queries DeepSeek balance through the backend", async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ is_available: true, balance_infos: [] }),
+    };
+  };
+
+  try {
+    await getDeepSeekBalance("sk-balance");
+    assert.equal(captured.url, "/api/account/deepseek/balance");
+    assert.equal(captured.options.headers["X-DeepSeek-API-Key"], "sk-balance");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("sends optional LLM judge settings", async () => {

@@ -282,6 +282,20 @@ button {
   color: #ddd;
 }
 
+.sidebar__footer-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.sidebar__footer-copy small {
+  overflow: hidden;
+  color: #6f998f;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
@@ -292,6 +306,11 @@ button {
 .status-dot--configured {
   background: #10a37f;
   box-shadow: 0 0 0 3px rgb(16 163 127 / 12%);
+}
+
+.status-dot--unavailable {
+  background: #d96c6c;
+  box-shadow: 0 0 0 3px rgb(217 108 108 / 12%);
 }
 
 .chat-panel {
@@ -1128,6 +1147,108 @@ button {
   margin-top: 14px;
   color: #bbb;
   font-size: 13px;
+}
+
+.api-balance-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #3d4a47;
+  border-radius: 11px;
+  background: #1e2927;
+}
+
+.api-balance-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.api-balance-card > header div {
+  display: grid;
+  gap: 2px;
+}
+
+.api-balance-card > header strong {
+  color: #c6ded8;
+  font-size: 12px;
+}
+
+.api-balance-card > header small,
+.api-balance-list article small {
+  color: #78938d;
+  font-size: 10px;
+}
+
+.balance-refresh {
+  padding: 5px 9px;
+  border: 1px solid #4a5d58;
+  border-radius: 7px;
+  background: transparent;
+  color: #9fc8be;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.balance-refresh:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.api-balance-list {
+  display: grid;
+  gap: 7px;
+}
+
+.api-balance-list article {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 3px 8px;
+  padding-top: 7px;
+  border-top: 1px solid #34413e;
+}
+
+.api-balance-list article > span {
+  color: #76948d;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.api-balance-list article > strong {
+  color: #d9e9e5;
+  font-size: 16px;
+}
+
+.api-balance-list article > small {
+  grid-column: 2;
+}
+
+.api-balance-status {
+  width: max-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #294139;
+  color: #91d1bd;
+  font-size: 9px;
+}
+
+.api-balance-status--unavailable {
+  background: #482c2c;
+  color: #e8a3a3;
+}
+
+.api-key-dialog .api-balance-error,
+.api-key-dialog .api-balance-placeholder {
+  margin: 0;
+  color: #d89999;
+  font-size: 10px;
+}
+
+.api-key-dialog .api-balance-placeholder {
+  color: #78938d;
 }
 
 .dialog-close,
