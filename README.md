@@ -34,6 +34,7 @@ Supervisor（拆解任务并选择 specialist）
 - 版本化 golden dataset、规则评分和 LLM-as-a-judge 评测
 - Form.io schema 驱动的自定义评测用例，以及安全 Markdown 评分/输出
 - FastAPI + SQLAlchemy + PostgreSQL/pgvector 后端，Vue 3 前端
+- CI 测试门禁、完整 Compose 冒烟测试、SBOM 和 Git SHA 不可变镜像
 
 ## 本地启动
 

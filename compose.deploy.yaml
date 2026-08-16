@@ -3,7 +3,6 @@ name: nano
 services:
   postgres:
     image: pgvector/pgvector:pg17
-    pull_policy: always
     restart: unless-stopped
     environment:
       POSTGRES_DB: agent
@@ -19,14 +18,11 @@ services:
       start_period: 10s
 
   backend:
-    image: ghcr.io/shaoqi2002/nano-backend:latest
-    pull_policy: always
+    image: ghcr.io/shaoqi2002/nano-backend:${NANO_IMAGE_TAG:-latest}
     restart: unless-stopped
     dns:
       - 223.5.5.5
       - 119.29.29.29
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
     environment:
       DATABASE_URL: postgresql+asyncpg://agent:${POSTGRES_PASSWORD}@postgres:5432/agent
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
@@ -79,11 +75,8 @@ services:
       start_period: 20s
 
   frontend:
-    image: ghcr.io/shaoqi2002/nano-frontend:latest
-    pull_policy: always
+    image: ghcr.io/shaoqi2002/nano-frontend:${NANO_IMAGE_TAG:-latest}
     restart: unless-stopped
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
     ports:
       - "${APP_PORT:-8088}:80"
     depends_on:

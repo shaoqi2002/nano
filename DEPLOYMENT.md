@@ -1,9 +1,9 @@
-# R4S deployment
+# iStoreOS / ARM64 deployment
 
-The ARM64 images are published to GHCR after every push to `master`.
-The deployment stack includes Watchtower, which checks every five minutes and
-automatically updates only the frontend and backend containers. PostgreSQL is
-not opted in to automatic updates.
+Every push to `master` first runs backend and frontend tests, verifies that the
+application imports, and starts the complete Compose stack for a health smoke
+test. ARM64 images are published to GHCR only after all gates pass. Each image
+receives both `latest` and an immutable full Git commit SHA tag.
 
 ## First installation or configuration recovery
 
@@ -15,9 +15,24 @@ docker compose --env-file .env.production -f compose.yaml config
 docker compose --env-file .env.production -f compose.yaml up -d
 ```
 
-The backend and Watchtower use public DNS servers explicitly because Tailscale
-may replace the host resolver with `100.100.100.100`, which Docker's embedded
-resolver cannot always reach from a bridge network.
+The backend uses public DNS servers explicitly because Tailscale may replace
+the host resolver with `100.100.100.100`, which Docker's embedded resolver
+cannot always reach from a bridge network.
+
+## Manual update and rollback
+
+Nano does not run an automatic container updater. Update only the application
+images, so an intermittent Docker Hub connection does not block deployment by
+trying to pull PostgreSQL again:
+
+```sh
+docker compose --env-file .env.production -f compose.yaml pull backend frontend && docker compose --env-file .env.production -f compose.yaml up -d --pull never --force-recreate backend frontend
+```
+
+For a reproducible release or rollback, set `NANO_IMAGE_TAG` in
+`.env.production` to a full commit SHA published by the workflow, then run the
+same command. Set it back to `latest` when you want to follow the newest
+successful `master` build.
 
 ## Web research settings
 
@@ -80,5 +95,6 @@ download, and delete documents.
 ```sh
 docker inspect nano-backend-1 --format 'DNS={{json .HostConfig.Dns}}'
 docker exec nano-backend-1 python -c "import socket; print(socket.gethostbyname('api.deepseek.com'))"
-docker logs --tail 100 nano-watchtower-1
+docker compose --env-file .env.production -f compose.yaml ps
+docker compose --env-file .env.production -f compose.yaml logs --tail=100 backend frontend
 ```

@@ -1,17 +1,82 @@
-name: Publish ARM64 images
+name: Test, smoke, and publish images
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Test backend and application imports
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          python -m unittest discover -s tests
+          python -c "import app.main; print('application import ok')"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Test and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  container-smoke:
+    name: Container smoke test
+    needs: quality
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-postgres-password
+      APP_PORT: "8088"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build and start the complete stack
+        run: docker compose -f compose.prod.yaml up -d --build --wait --wait-timeout 180
+
+      - name: Verify backend and frontend through nginx
+        run: |
+          curl --fail --show-error --retry 10 --retry-delay 2 http://127.0.0.1:8088/api/health
+          curl --fail --show-error --retry 10 --retry-delay 2 http://127.0.0.1:8088/
+
+      - name: Print container diagnostics
+        if: failure()
+        run: |
+          docker compose -f compose.prod.yaml ps
+          docker compose -f compose.prod.yaml logs --tail=200
+
+      - name: Stop smoke-test stack
+        if: always()
+        run: docker compose -f compose.prod.yaml down -v
+
   build-and-push:
-    name: Build ${{ matrix.service }}
+    name: Publish ${{ matrix.service }} ARM64 image
+    if: github.event_name != 'pull_request'
+    needs: [quality, container-smoke]
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -29,8 +94,7 @@ jobs:
             image: ghcr.io/shaoqi2002/nano-frontend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -42,14 +106,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate image metadata
+      - name: Generate immutable image metadata
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ matrix.image }}
           tags: |
             type=raw,value=latest
-            type=sha,format=long
+            type=raw,value=${{ github.sha }}
 
       - name: Build and push ARM64 image
         uses: docker/build-push-action@v7
@@ -59,5 +123,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
