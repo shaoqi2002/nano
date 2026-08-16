@@ -90,20 +90,5 @@ services:
       backend:
         condition: service_healthy
 
-  watchtower:
-    image: nickfedor/watchtower:arm64v8-1.20.2
-    pull_policy: always
-    restart: unless-stopped
-    dns:
-      - 223.5.5.5
-      - 119.29.29.29
-    environment:
-      WATCHTOWER_LABEL_ENABLE: "true"
-      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_ROLLING_RESTART: "true"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
 volumes:
   postgres_data:
