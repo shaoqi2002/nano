@@ -462,13 +462,14 @@ onMounted(async () => {
 .judge-result header span { color: #8fcaba; font-size: 11px; font-weight: 700; }
 .judge-result > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
 .judge-result > div span { color: #999; font-size: 9px; }
-.eval-dialog-backdrop { position: fixed; z-index: 30; display: grid; padding: 24px; background: rgb(0 0 0 / 62%); inset: 0; place-items: center; }
-.eval-case-dialog { width: min(900px, 96vw); max-height: 92vh; padding: 16px; overflow-y: auto; border: 1px solid #444; border-radius: 13px; background: #262626; box-shadow: 0 20px 70px rgb(0 0 0 / 45%); }
-.eval-case-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 13px; padding-bottom: 11px; border-bottom: 1px solid #3c3c3c; }
+.eval-dialog-backdrop { position: fixed; z-index: 30; display: grid; padding: 24px; background: rgb(9 9 9 / 76%); backdrop-filter: blur(3px); inset: 0; place-items: center; }
+.eval-case-dialog { display: grid; width: min(980px, 96vw); height: min(860px, 92vh); min-height: 0; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid #414141; border-radius: 14px; background: #272727; box-shadow: 0 24px 80px rgb(0 0 0 / 55%); }
+.eval-case-dialog > header { display: flex; min-height: 68px; align-items: center; justify-content: space-between; padding: 14px 19px; border-bottom: 1px solid #393939; background: #252525; }
 .eval-case-dialog > header div { display: grid; gap: 3px; }
-.eval-case-dialog > header strong { color: #ddd; font-size: 14px; }
-.eval-case-dialog > header span { color: #777; font-size: 10px; }
-.eval-case-dialog > header button { border: 0; background: transparent; color: #999; cursor: pointer; font-size: 20px; }
+.eval-case-dialog > header strong { color: #e0e0e0; font-size: 15px; }
+.eval-case-dialog > header span { color: #747474; font-size: 10px; }
+.eval-case-dialog > header button { display: grid; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #929292; cursor: pointer; font-size: 19px; }
+.eval-case-dialog > header button:hover { background: #343434; color: #ddd; }
 .eval-case-saving { padding: 40px; color: #888; text-align: center; }
-@media (max-width: 760px) { .eval-layout { grid-template-columns: 150px minmax(0, 1fr); } .eval-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .eval-result > header { grid-template-columns: 40px minmax(0, 1fr); } .eval-result header small { display: none; } }
+@media (max-width: 760px) { .eval-layout { grid-template-columns: 150px minmax(0, 1fr); } .eval-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .eval-result > header { grid-template-columns: 40px minmax(0, 1fr); } .eval-result header small { display: none; } .eval-dialog-backdrop { padding: 0; } .eval-case-dialog { width: 100vw; height: 100vh; max-height: none; border: 0; border-radius: 0; } }
 </style>
