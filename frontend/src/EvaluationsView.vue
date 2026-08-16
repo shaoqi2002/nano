@@ -2,11 +2,15 @@
 import { computed, onMounted, ref } from "vue";
 
 import {
+  createEvalCase,
+  deleteEvalCase,
   getEvalDataset,
   getEvalRun,
   listEvalRuns,
   runEvalStream,
+  updateEvalCase,
 } from "./api";
+import EvalCaseForm from "./EvalCaseForm.vue";
 
 
 const emit = defineEmits(["back", "configure-keys"]);
@@ -27,6 +31,9 @@ const errorMessage = ref("");
 const controller = ref(null);
 const judgeEnabled = ref(false);
 const judgeWeight = ref(0.5);
+const editorOpen = ref(false);
+const editingCase = ref(null);
+const isSavingCase = ref(false);
 
 const selectedCount = computed(() => selectedIds.value.length);
 const passRate = computed(() => {
@@ -52,6 +59,50 @@ function toggleCase(id) {
   selectedIds.value = selectedIds.value.includes(id)
     ? selectedIds.value.filter((item) => item !== id)
     : [...selectedIds.value, id];
+}
+
+async function reloadDataset() {
+  const currentIds = new Set(selectedIds.value);
+  dataset.value = await getEvalDataset();
+  selectedIds.value = dataset.value.cases
+    .filter((item) => currentIds.has(item.id))
+    .map((item) => item.id);
+}
+
+function openCaseEditor(item = null) {
+  editingCase.value = item;
+  editorOpen.value = true;
+}
+
+async function saveCase(definition) {
+  if (isSavingCase.value) return;
+  isSavingCase.value = true;
+  errorMessage.value = "";
+  try {
+    const saved = editingCase.value?.editable
+      ? await updateEvalCase(editingCase.value.id, definition)
+      : await createEvalCase(definition);
+    await reloadDataset();
+    if (!selectedIds.value.includes(saved.id)) selectedIds.value.push(saved.id);
+    editorOpen.value = false;
+    editingCase.value = null;
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    isSavingCase.value = false;
+  }
+}
+
+async function removeCase(item) {
+  if (!window.confirm(`删除自定义用例“${item.title}”？历史评测结果会保留。`)) return;
+  errorMessage.value = "";
+  try {
+    await deleteEvalCase(item.id);
+    selectedIds.value = selectedIds.value.filter((id) => id !== item.id);
+    await reloadDataset();
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
 }
 
 function handleEvalEvent(event) {
@@ -182,7 +233,10 @@ onMounted(async () => {
     <div v-else class="eval-layout">
       <aside class="eval-sidebar">
         <section>
-          <h2>黄金测试集</h2>
+          <div class="eval-sidebar__title">
+            <h2>评测用例</h2>
+            <button type="button" @click="openCaseEditor()">＋ 新建</button>
+          </div>
           <p>{{ dataset?.description }}</p>
           <label class="judge-toggle">
             <input v-model="judgeEnabled" type="checkbox">
@@ -195,16 +249,27 @@ onMounted(async () => {
             <span>Judge 权重 {{ Math.round(judgeWeight * 100) }}%</span>
             <input v-model.number="judgeWeight" type="range" min="0.1" max="0.9" step="0.1">
           </label>
-          <button
+          <div
             v-for="item in dataset?.cases"
             :key="item.id"
-            class="eval-case"
-            :class="{ 'eval-case--selected': selectedIds.includes(item.id) }"
-            @click="toggleCase(item.id)"
+            class="eval-case-row"
           >
-            <span class="eval-checkbox">{{ selectedIds.includes(item.id) ? "✓" : "" }}</span>
-            <span><strong>{{ item.title }}</strong><small>{{ item.mode }}</small></span>
-          </button>
+            <button
+              class="eval-case"
+              :class="{ 'eval-case--selected': selectedIds.includes(item.id) }"
+              @click="toggleCase(item.id)"
+            >
+              <span class="eval-checkbox">{{ selectedIds.includes(item.id) ? "✓" : "" }}</span>
+              <span>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.mode }} · {{ item.source === "custom" ? "自定义" : "预置" }}</small>
+              </span>
+            </button>
+            <div v-if="item.editable" class="eval-case-actions">
+              <button type="button" title="编辑" @click="openCaseEditor(item)">✎</button>
+              <button type="button" title="删除" @click="removeCase(item)">×</button>
+            </div>
+          </div>
         </section>
         <section class="eval-history">
           <h2>历史运行</h2>
@@ -285,6 +350,27 @@ onMounted(async () => {
         </div>
       </section>
     </div>
+
+    <div v-if="editorOpen" class="eval-dialog-backdrop" @click.self="editorOpen = false">
+      <section class="eval-case-dialog" aria-label="自定义评测用例">
+        <header>
+          <div>
+            <strong>{{ editingCase?.editable ? "编辑自定义用例" : "新建自定义用例" }}</strong>
+            <span>选择预置模板后，只需调整需要变化的条件</span>
+          </div>
+          <button type="button" aria-label="关闭" @click="editorOpen = false">×</button>
+        </header>
+        <div v-if="isSavingCase" class="eval-case-saving">正在保存…</div>
+        <EvalCaseForm
+          v-else
+          :initial-case="editingCase"
+          :options="dataset.form_options"
+          :templates="dataset.cases"
+          @cancel="editorOpen = false"
+          @save="saveCase"
+        />
+      </section>
+    </div>
   </main>
 </template>
 
@@ -305,6 +391,8 @@ onMounted(async () => {
 .eval-sidebar { min-height: 0; padding: 14px 10px; overflow-y: auto; border-right: 1px solid #353535; background: #1b1b1b; }
 .eval-sidebar section { display: grid; gap: 6px; }
 .eval-sidebar h2 { margin: 4px 8px 0; color: #aaa; font-size: 11px; text-transform: uppercase; }
+.eval-sidebar__title { display: flex; align-items: center; justify-content: space-between; }
+.eval-sidebar__title button { margin-right: 5px; padding: 4px 7px; border: 1px solid #414141; border-radius: 6px; background: #292929; color: #9ac8bd; cursor: pointer; font-size: 9px; }
 .eval-sidebar p { margin: 2px 8px 8px; color: #777; font-size: 10px; line-height: 1.5; }
 .judge-toggle { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 7px; margin: 2px 8px 8px; padding: 9px; border: 1px solid #3d3d3d; border-radius: 8px; cursor: pointer; }
 .judge-toggle input { margin: 2px 0 0; accent-color: #82c9b9; }
@@ -313,12 +401,16 @@ onMounted(async () => {
 .judge-toggle small, .judge-weight span { color: #777; font-size: 9px; }
 .judge-weight { display: grid; gap: 5px; margin: 0 8px 9px; }
 .judge-weight input { width: 100%; accent-color: #82c9b9; }
-.eval-case { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 7px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: #aaa; cursor: pointer; text-align: left; }
+.eval-case-row { position: relative; display: grid; }
+.eval-case { display: grid; width: 100%; grid-template-columns: 20px minmax(0, 1fr); gap: 7px; padding: 9px 54px 9px 9px; border: 0; border-radius: 8px; background: transparent; color: #aaa; cursor: pointer; text-align: left; }
 .eval-case:hover, .eval-case--selected { background: #2c2c2c; }
 .eval-checkbox { display: grid; width: 17px; height: 17px; place-items: center; border: 1px solid #555; border-radius: 4px; color: #8fcaba; font-size: 10px; }
 .eval-case > span:last-child { display: grid; gap: 3px; }
 .eval-case strong { overflow: hidden; color: #ddd; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .eval-case small { color: #777; font-size: 9px; }
+.eval-case-actions { position: absolute; top: 50%; right: 6px; display: flex; gap: 2px; transform: translateY(-50%); }
+.eval-case-actions button { display: grid; width: 20px; height: 20px; place-items: center; border: 0; border-radius: 5px; background: #353535; color: #999; cursor: pointer; }
+.eval-case-actions button:hover { background: #444; color: #ddd; }
 .eval-history { margin-top: 20px; padding-top: 12px; border-top: 1px solid #333; }
 .eval-history button { display: flex; align-items: center; justify-content: space-between; padding: 8px; border: 0; border-radius: 7px; background: transparent; color: #aaa; cursor: pointer; }
 .eval-history button:hover, .eval-history__item--active { background: #292929 !important; }
@@ -356,5 +448,13 @@ onMounted(async () => {
 .judge-result > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
 .judge-result > div span { color: #999; font-size: 9px; }
 .judge-result p { margin: 0; color: #aaa; font-size: 10px; line-height: 1.5; }
+.eval-dialog-backdrop { position: fixed; z-index: 30; display: grid; padding: 24px; background: rgb(0 0 0 / 62%); inset: 0; place-items: center; }
+.eval-case-dialog { width: min(900px, 96vw); max-height: 92vh; padding: 16px; overflow-y: auto; border: 1px solid #444; border-radius: 13px; background: #262626; box-shadow: 0 20px 70px rgb(0 0 0 / 45%); }
+.eval-case-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 13px; padding-bottom: 11px; border-bottom: 1px solid #3c3c3c; }
+.eval-case-dialog > header div { display: grid; gap: 3px; }
+.eval-case-dialog > header strong { color: #ddd; font-size: 14px; }
+.eval-case-dialog > header span { color: #777; font-size: 10px; }
+.eval-case-dialog > header button { border: 0; background: transparent; color: #999; cursor: pointer; font-size: 20px; }
+.eval-case-saving { padding: 40px; color: #888; text-align: center; }
 @media (max-width: 760px) { .eval-layout { grid-template-columns: 150px minmax(0, 1fr); } .eval-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .eval-result > header { grid-template-columns: 40px minmax(0, 1fr); } .eval-result header small { display: none; } }
 </style>

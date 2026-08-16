@@ -120,6 +120,30 @@ export function getEvalDataset() {
   return request("/evals/dataset");
 }
 
+function customEvalCasePath(caseId) {
+  return String(caseId).replace(/^custom:/, "");
+}
+
+export function createEvalCase(definition) {
+  return request("/evals/cases", {
+    method: "POST",
+    body: JSON.stringify(definition),
+  });
+}
+
+export function updateEvalCase(caseId, definition) {
+  return request(`/evals/cases/${customEvalCasePath(caseId)}`, {
+    method: "PUT",
+    body: JSON.stringify(definition),
+  });
+}
+
+export function deleteEvalCase(caseId) {
+  return request(`/evals/cases/${customEvalCasePath(caseId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function listEvalRuns() {
   return request("/evals/runs");
 }

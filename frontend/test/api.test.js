@@ -3,11 +3,14 @@ import test from "node:test";
 
 import {
   consumeEventStream,
+  createEvalCase,
+  deleteEvalCase,
   documentContentUrl,
   getAgentRunEvents,
   getEvalDataset,
   sendMessage,
   runEvalStream,
+  updateEvalCase,
   uploadDocument,
 } from "../src/api.js";
 
@@ -73,6 +76,32 @@ test("loads the versioned eval dataset", async () => {
     const dataset = await getEvalDataset();
     assert.equal(dataset.version, "golden-v1");
     assert.equal(requestedUrl, "/api/evals/dataset");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("creates updates and deletes custom eval cases", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      status: options.method === "DELETE" ? 204 : 200,
+      json: async () => ({ id: "custom:case-1" }),
+    };
+  };
+
+  try {
+    await createEvalCase({ title: "Custom", prompt: "Test" });
+    await updateEvalCase("custom:case-1", { title: "Updated", prompt: "Test" });
+    await deleteEvalCase("custom:case-1");
+    assert.deepEqual(requests.map((item) => [item.url, item.options.method]), [
+      ["/api/evals/cases", "POST"],
+      ["/api/evals/cases/case-1", "PUT"],
+      ["/api/evals/cases/case-1", "DELETE"],
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
