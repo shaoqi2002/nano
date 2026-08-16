@@ -10,6 +10,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from app.agent.state import AgentState, ResearchPlan, ReviewResult, SpecialistRole
+from app.agent.structured import with_structured_output
 from app.core.config import (
     AGENT_MAX_RESEARCH_RETRIES,
     AGENT_MAX_REVISIONS,
@@ -281,7 +282,7 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
             "任务要具体且避免重复。"
         )
         try:
-            plan = await model.with_structured_output(ResearchPlan).ainvoke([
+            plan = await with_structured_output(model, ResearchPlan).ainvoke([
                 SystemMessage(content=prompt),
                 HumanMessage(content=state["query"]),
             ])
@@ -430,7 +431,7 @@ def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
         writer = get_stream_writer()
         writer({"type": "node.started", "node": "reviewer", "label": "审核报告与引用"})
         try:
-            review = await model.with_structured_output(ReviewResult).ainvoke([
+            review = await with_structured_output(model, ReviewResult).ainvoke([
                 SystemMessage(content=(
                     "审核报告是否回答用户问题、结论是否有研究笔记支持、URL 是否保留。"
                     "只报告实质性问题。"

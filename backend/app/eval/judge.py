@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.eval.dataset import EvalCase
 from app.eval.scorer import EvalScore
+from app.agent.structured import with_structured_output
 
 
 class JudgeVerdict(BaseModel):
@@ -61,7 +62,7 @@ async def judge_agent_output(
         "observed_nodes": nodes,
         "assistant_answer": answer,
     }
-    return await model.with_structured_output(JudgeVerdict).ainvoke([
+    return await with_structured_output(model, JudgeVerdict).ainvoke([
         SystemMessage(content=(
             "你是严格、独立的 Agent 评测员。按 1 到 5 分分别评价正确性、完整性、"
             "依据性和指令遵循。不要因为文风华丽而加分。无法从提供材料验证的事实应降低"
