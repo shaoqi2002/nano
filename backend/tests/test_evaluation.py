@@ -8,9 +8,14 @@ from app.eval.dataset import EVAL_FORM_OPTIONS, EvalCase, load_golden_dataset
 from app.eval.scorer import score_agent_output
 from app.eval.judge import JudgeVerdict, combine_with_judge
 from app.schema.evaluation import EvalCaseDefinition
+from app.core.database import Base
+import app.model  # noqa: F401
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_builtin_case_exclusion_table_is_registered(self) -> None:
+        self.assertIn("agent_eval_case_exclusions", Base.metadata.tables)
+
     def test_custom_case_schema_accepts_supported_agent_modes(self) -> None:
         case = EvalCaseDefinition(
             title="Custom research case",

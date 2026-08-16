@@ -144,6 +144,10 @@ export function deleteEvalCase(caseId) {
   });
 }
 
+export function restorePresetEvalCases() {
+  return request("/evals/cases/presets/restore", { method: "POST" });
+}
+
 export function listEvalRuns() {
   return request("/evals/runs");
 }

@@ -70,3 +70,12 @@ class AgentEvalCase(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class AgentEvalCaseExclusion(Base):
+    __tablename__ = "agent_eval_case_exclusions"
+
+    case_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

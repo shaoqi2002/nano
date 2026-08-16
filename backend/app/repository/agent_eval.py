@@ -1,9 +1,14 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.model.agent_eval import AgentEvalCase, AgentEvalResult, AgentEvalRun
+from app.model.agent_eval import (
+    AgentEvalCase,
+    AgentEvalCaseExclusion,
+    AgentEvalResult,
+    AgentEvalRun,
+)
 
 
 async def create_eval_case(session: AsyncSession, definition: dict) -> AgentEvalCase:
@@ -26,6 +31,20 @@ async def get_eval_case(
 
 async def delete_eval_case(session: AsyncSession, case: AgentEvalCase) -> None:
     await session.delete(case)
+
+
+async def list_excluded_builtin_case_ids(session: AsyncSession) -> set[str]:
+    statement = select(AgentEvalCaseExclusion.case_id)
+    return set(await session.scalars(statement))
+
+
+async def exclude_builtin_case(session: AsyncSession, case_id: str) -> None:
+    if await session.get(AgentEvalCaseExclusion, case_id) is None:
+        session.add(AgentEvalCaseExclusion(case_id=case_id))
+
+
+async def restore_builtin_cases(session: AsyncSession) -> None:
+    await session.execute(delete(AgentEvalCaseExclusion))
 
 
 async def create_eval_run(

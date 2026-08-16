@@ -8,6 +8,7 @@ import {
   getEvalRun,
   listEvalRuns,
   runEvalStream,
+  restorePresetEvalCases,
   updateEvalCase,
 } from "./api";
 import EvalCaseForm from "./EvalCaseForm.vue";
@@ -95,11 +96,24 @@ async function saveCase(definition) {
 }
 
 async function removeCase(item) {
-  if (!window.confirm(`删除自定义用例“${item.title}”？历史评测结果会保留。`)) return;
+  const detail = item.source === "builtin"
+    ? "预置用例将从侧边栏隐藏，之后可以恢复。"
+    : "历史评测结果会保留。";
+  if (!window.confirm(`删除用例“${item.title}”？${detail}`)) return;
   errorMessage.value = "";
   try {
     await deleteEvalCase(item.id);
     selectedIds.value = selectedIds.value.filter((id) => id !== item.id);
+    await reloadDataset();
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
+}
+
+async function restorePresets() {
+  errorMessage.value = "";
+  try {
+    await restorePresetEvalCases();
     await reloadDataset();
   } catch (error) {
     errorMessage.value = error.message;
@@ -236,7 +250,15 @@ onMounted(async () => {
         <section>
           <div class="eval-sidebar__title">
             <h2>评测用例</h2>
-            <button type="button" @click="openCaseEditor()">＋ 新建</button>
+            <div>
+              <button
+                v-if="dataset?.hidden_builtin_count"
+                type="button"
+                title="恢复所有已删除的预置用例"
+                @click="restorePresets"
+              >↺ 恢复 {{ dataset.hidden_builtin_count }}</button>
+              <button type="button" @click="openCaseEditor()">＋ 新建</button>
+            </div>
           </div>
           <p>{{ dataset?.description }}</p>
           <label class="judge-toggle">
@@ -266,9 +288,9 @@ onMounted(async () => {
                 <small>{{ item.mode }} · {{ item.source === "custom" ? "自定义" : "预置" }}</small>
               </span>
             </button>
-            <div v-if="item.editable" class="eval-case-actions">
-              <button type="button" title="编辑" @click="openCaseEditor(item)">✎</button>
-              <button type="button" title="删除" @click="removeCase(item)">×</button>
+            <div v-if="item.editable || item.deletable" class="eval-case-actions">
+              <button v-if="item.editable" type="button" title="编辑" @click="openCaseEditor(item)">✎</button>
+              <button v-if="item.deletable" type="button" title="删除" @click="removeCase(item)">×</button>
             </div>
           </div>
         </section>
@@ -402,7 +424,8 @@ onMounted(async () => {
 .eval-sidebar section { display: grid; gap: 6px; }
 .eval-sidebar h2 { margin: 4px 8px 0; color: #aaa; font-size: 11px; text-transform: uppercase; }
 .eval-sidebar__title { display: flex; align-items: center; justify-content: space-between; }
-.eval-sidebar__title button { margin-right: 5px; padding: 4px 7px; border: 1px solid #414141; border-radius: 6px; background: #292929; color: #9ac8bd; cursor: pointer; font-size: 9px; }
+.eval-sidebar__title > div { display: flex; gap: 4px; margin-right: 5px; }
+.eval-sidebar__title button { padding: 4px 7px; border: 1px solid #414141; border-radius: 6px; background: #292929; color: #9ac8bd; cursor: pointer; font-size: 9px; white-space: nowrap; }
 .eval-sidebar p { margin: 2px 8px 8px; color: #777; font-size: 10px; line-height: 1.5; }
 .judge-toggle { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 7px; margin: 2px 8px 8px; padding: 9px; border: 1px solid #3d3d3d; border-radius: 8px; cursor: pointer; }
 .judge-toggle input { margin: 2px 0 0; accent-color: #82c9b9; }

@@ -14,11 +14,14 @@ from app.eval.dataset import EVAL_FORM_OPTIONS, EvalCase, load_golden_dataset
 from app.repository.agent_eval import (
     create_eval_case,
     delete_eval_case,
+    exclude_builtin_case,
     get_eval_case,
     get_eval_run,
     list_eval_cases,
+    list_excluded_builtin_case_ids,
     list_eval_results,
     list_eval_runs,
+    restore_builtin_cases,
 )
 from app.schema.evaluation import (
     EvalCaseDefinition,
@@ -61,13 +64,15 @@ def _stored_case(case) -> EvalCase:
 @router.get("/dataset", response_model=EvalDatasetResponse)
 async def read_eval_dataset(session: SessionDependency) -> EvalDatasetResponse:
     dataset = load_golden_dataset()
+    excluded_ids = await list_excluded_builtin_case_ids(session)
     custom_cases = [_stored_case(case) for case in await list_eval_cases(session)]
     return EvalDatasetResponse(
         version=dataset.version,
         description=dataset.description,
-        cases=[_case_response(case) for case in dataset.cases]
+        cases=[_case_response(case) for case in dataset.cases if case.id not in excluded_ids]
         + [_case_response(case, source="custom") for case in custom_cases],
         form_options=EVAL_FORM_OPTIONS,
+        hidden_builtin_count=len(excluded_ids),
     )
 
 
@@ -94,12 +99,28 @@ async def update_custom_eval_case(
     return _case_response(_stored_case(case), source="custom")
 
 
-@router.delete("/cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_custom_eval_case(
-    case_id: UUID, session: SessionDependency
-) -> Response:
+@router.post("/cases/presets/restore", status_code=status.HTTP_204_NO_CONTENT)
+async def restore_preset_eval_cases(session: SessionDependency) -> Response:
     async with session.begin():
-        case = await get_eval_case(session, case_id)
+        await restore_builtin_cases(session)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_eval_case(
+    case_id: str, session: SessionDependency
+) -> Response:
+    dataset = load_golden_dataset()
+    if case_id in {case.id for case in dataset.cases}:
+        async with session.begin():
+            await exclude_builtin_case(session, case_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    try:
+        custom_id = UUID(case_id.removeprefix("custom:"))
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail="Eval case not found") from error
+    async with session.begin():
+        case = await get_eval_case(session, custom_id)
         if case is None:
             raise HTTPException(status_code=404, detail="Eval case not found")
         await delete_eval_case(session, case)
@@ -141,7 +162,8 @@ async def create_eval_run_stream(
     ] = None,
 ) -> StreamingResponse:
     dataset = load_golden_dataset()
-    by_id = {case.id: case for case in dataset.cases}
+    excluded_ids = await list_excluded_builtin_case_ids(session)
+    by_id = {case.id: case for case in dataset.cases if case.id not in excluded_ids}
     for stored in await list_eval_cases(session):
         custom = _stored_case(stored)
         by_id[custom.id] = custom

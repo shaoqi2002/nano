@@ -10,6 +10,7 @@ import {
   getEvalDataset,
   sendMessage,
   runEvalStream,
+  restorePresetEvalCases,
   updateEvalCase,
   uploadDocument,
 } from "../src/api.js";
@@ -97,10 +98,14 @@ test("creates updates and deletes custom eval cases", async () => {
     await createEvalCase({ title: "Custom", prompt: "Test" });
     await updateEvalCase("custom:case-1", { title: "Updated", prompt: "Test" });
     await deleteEvalCase("custom:case-1");
+    await deleteEvalCase("rag-definition");
+    await restorePresetEvalCases();
     assert.deepEqual(requests.map((item) => [item.url, item.options.method]), [
       ["/api/evals/cases", "POST"],
       ["/api/evals/cases/case-1", "PUT"],
       ["/api/evals/cases/case-1", "DELETE"],
+      ["/api/evals/cases/rag-definition", "DELETE"],
+      ["/api/evals/cases/presets/restore", "POST"],
     ]);
   } finally {
     globalThis.fetch = originalFetch;

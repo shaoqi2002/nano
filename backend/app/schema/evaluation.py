@@ -62,6 +62,7 @@ class EvalCaseResponse(EvalCaseDefinition):
     id: str
     source: Literal["builtin", "custom"] = "builtin"
     editable: bool = False
+    deletable: bool = True
 
 
 class EvalDatasetResponse(BaseModel):
@@ -69,6 +70,7 @@ class EvalDatasetResponse(BaseModel):
     description: str
     cases: list[EvalCaseResponse]
     form_options: dict[str, list[str]]
+    hidden_builtin_count: int = 0
 
 
 class EvalResultResponse(BaseModel):
