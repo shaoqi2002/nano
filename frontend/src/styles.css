@@ -641,6 +641,21 @@ button {
   padding-left: 20px;
 }
 
+.agent-role-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 5px;
+  padding: 1px 6px;
+  border: 1px solid rgb(114 214 191 / 24%);
+  border-radius: 999px;
+  background: rgb(114 214 191 / 8%);
+  color: #91cabb;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 .agent-step {
   display: flex;
   align-items: center;

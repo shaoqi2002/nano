@@ -245,6 +245,17 @@ function toolLabel(name) {
   }[name] || name;
 }
 
+function agentLabel(agent) {
+  return {
+    supervisor: "Supervisor",
+    web_researcher: "Web Researcher",
+    document_analyst: "Document Analyst",
+    general_researcher: "General Researcher",
+    writer: "Writer",
+    reviewer: "Reviewer",
+  }[agent] || agent;
+}
+
 function handleStreamEvent(message, event) {
   if (event.type === "message.started") {
     message.runId = event.run_id;
@@ -272,12 +283,17 @@ function handleStreamEvent(message, event) {
     const callId = `node-${event.node}`;
     const existing = message.steps.find((item) => item.callId === callId);
     if (existing) {
-      Object.assign(existing, { label: event.label || event.node, status: "running" });
+      Object.assign(existing, {
+        label: event.label || event.node,
+        agent: event.agent,
+        status: "running",
+      });
     } else {
       message.steps.push({
         callId,
         name: event.node,
         label: event.label || event.node,
+        agent: event.agent,
         status: "running",
       });
     }
@@ -287,6 +303,12 @@ function handleStreamEvent(message, event) {
     if (step) step.status = event.type === "node.failed" ? "failed" : "completed";
   } else if (event.type === "plan.ready") {
     message.plan = event.plan;
+  } else if (event.type === "agent.retrying") {
+    const step = message.steps.find((item) => item.callId === `node-${event.task_id}`);
+    if (step) {
+      step.retryAttempt = event.attempt;
+      step.message = event.message;
+    }
   } else if (["tool.completed", "tool.failed"].includes(event.type)) {
     const step = message.steps.find((item) => item.callId === event.call_id);
     if (step) {
@@ -441,8 +463,20 @@ function traceEventLabel(event) {
     "tool.failed": "工具失败",
     "plan.ready": "研究计划",
     "review.completed": "报告审核",
+    "agent.delegated": "Agent 任务交接",
+    "agent.retrying": "Agent 自动重试",
+    "agent.completed": "Agent 完成任务",
+    "agent.failed": "Agent 任务失败",
     "message.completed": "回答完成",
   }[event.event_type] || event.event_type;
+}
+
+function traceEventActor(event) {
+  const payload = event.payload || {};
+  if (event.event_type === "agent.delegated") {
+    return `${agentLabel(payload.from_agent)} → ${agentLabel(payload.to_agent)}`;
+  }
+  return agentLabel(payload.agent) || event.node || event.tool_name || "Agent";
 }
 
 function formatDurationMs(value) {
@@ -642,6 +676,7 @@ onMounted(async () => {
                 <strong>{{ message.plan.objective || "研究计划" }}</strong>
                 <ol>
                   <li v-for="task in message.plan.tasks" :key="task.id">
+                    <span v-if="task.agent" class="agent-role-badge">{{ agentLabel(task.agent) }}</span>
                     {{ task.question }}
                   </li>
                 </ol>
@@ -654,7 +689,11 @@ onMounted(async () => {
                   :class="`agent-step--${step.status}`"
                 >
                   <span class="agent-step__status" />
+                  <span v-if="step.agent" class="agent-role-badge">{{ agentLabel(step.agent) }}</span>
                   <span>{{ step.label }}</span>
+                  <span v-if="step.retryAttempt" class="agent-step__detail">
+                    第 {{ step.retryAttempt }} 次尝试
+                  </span>
                   <span v-if="step.resultCount !== undefined" class="agent-step__detail">
                     {{ step.resultCount }} 条结果
                   </span>
@@ -859,7 +898,7 @@ onMounted(async () => {
               <span class="trace-event__dot" :class="{ 'trace-event__dot--failed': event.event_type.endsWith('failed') }" />
               <div>
                 <strong>{{ traceEventLabel(event) }}</strong>
-                <span>{{ event.node || event.tool_name || "Agent" }} · {{ formatDate(event.created_at) }}</span>
+                <span>{{ traceEventActor(event) }} · {{ formatDate(event.created_at) }}</span>
                 <span v-if="event.duration_ms !== null">耗时 {{ formatDurationMs(event.duration_ms) }}</span>
                 <details v-if="Object.keys(event.payload || {}).length">
                   <summary>查看事件数据</summary>
