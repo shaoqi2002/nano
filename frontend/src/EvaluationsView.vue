@@ -33,11 +33,15 @@ const errorMessage = ref("");
 const controller = ref(null);
 const judgeEnabled = ref(false);
 const judgeWeight = ref(0.5);
+const baselineRunId = ref("");
 const editorOpen = ref(false);
 const editingCase = ref(null);
 const isSavingCase = ref(false);
 
 const selectedCount = computed(() => selectedIds.value.length);
+const baselineCandidates = computed(() => runs.value.filter(
+  (run) => run.status === "completed" && run.score !== null,
+));
 const passRate = computed(() => {
   if (!activeRun.value?.case_count) return "—";
   return `${Math.round((activeRun.value.passed_count / activeRun.value.case_count) * 100)}%`;
@@ -55,6 +59,12 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatDelta(value) {
+  if (value === null || value === undefined) return "—";
+  const points = value * 100;
+  return `${points > 0 ? "+" : ""}${points.toFixed(1)}pp`;
 }
 
 function toggleCase(id) {
@@ -133,6 +143,7 @@ function handleEvalEvent(event) {
         judge_enabled: event.judge_enabled,
         judge_weight: judgeWeight.value,
         judge_model: "configured judge model",
+        baseline: event.baseline,
       },
     };
     results.value = [];
@@ -154,7 +165,11 @@ function handleEvalEvent(event) {
       score: results.value.reduce((sum, item) => sum + item.score, 0) / results.value.length,
     };
   } else if (event.type === "eval.completed") {
-    activeRun.value = { ...activeRun.value, ...event.run };
+    activeRun.value = {
+      ...activeRun.value,
+      ...event.run,
+      config: { ...activeRun.value?.config, ...event.run.config },
+    };
     progress.value = null;
   } else if (event.type === "eval.failed") {
     throw new Error(event.message || "评测运行失败");
@@ -177,6 +192,7 @@ async function startEval() {
       props.tavilyApiKey,
       judgeEnabled.value,
       judgeWeight.value,
+      baselineRunId.value,
       handleEvalEvent,
       controller.value.signal,
     );
@@ -272,6 +288,15 @@ onMounted(async () => {
             <span>Judge 权重 {{ Math.round(judgeWeight * 100) }}%</span>
             <input v-model.number="judgeWeight" type="range" min="0.1" max="0.9" step="0.1">
           </label>
+          <label class="baseline-picker">
+            <span>Baseline 对比</span>
+            <select v-model="baselineRunId" :disabled="isRunning">
+              <option value="">不对比历史运行</option>
+              <option v-for="run in baselineCandidates" :key="run.id" :value="run.id">
+                {{ Math.round(run.score * 100) }}% · {{ run.passed_count }}/{{ run.case_count }} · {{ formatDate(run.created_at) }}
+              </option>
+            </select>
+          </label>
           <div
             v-for="item in dataset?.cases"
             :key="item.id"
@@ -329,7 +354,18 @@ onMounted(async () => {
         </div>
 
         <div v-if="!activeRun" class="eval-empty">选择用例并运行第一次评测。</div>
-        <div v-else class="eval-results">
+        <div v-if="activeRun?.config?.baseline?.baseline_score !== undefined" class="baseline-banner">
+          <strong>Baseline 对比</strong>
+          <span>
+            {{ Math.round(activeRun.config.baseline.baseline_score * 100) }}%
+            → {{ Math.round(activeRun.config.baseline.current_score * 100) }}%
+          </span>
+          <b :class="{ 'delta-negative': activeRun.config.baseline.score_delta < 0 }">
+            {{ formatDelta(activeRun.config.baseline.score_delta) }}
+          </b>
+          <small>共同用例 {{ activeRun.config.baseline.matched_case_count }}</small>
+        </div>
+        <div v-if="activeRun" class="eval-results">
           <article
             v-for="result in results"
             :key="result.id || result.case_id"
@@ -339,7 +375,12 @@ onMounted(async () => {
             <header>
               <span>{{ result.passed ? "PASS" : "FAIL" }}</span>
               <strong>{{ result.title }}</strong>
-              <small>{{ Math.round(result.score * 100) }}% · {{ formatDuration(result.duration_ms) }}</small>
+              <small>
+                {{ Math.round(result.score * 100) }}% · {{ formatDuration(result.duration_ms) }}
+                <template v-if="result.metrics?.baseline">
+                  · vs baseline {{ formatDelta(result.metrics.baseline.score_delta) }}
+                </template>
+              </small>
             </header>
             <p v-if="result.error" class="eval-result__error">{{ result.error }}</p>
             <details>
@@ -443,6 +484,9 @@ onMounted(async () => {
 .judge-toggle small, .judge-weight span { color: #777; font-size: 9px; }
 .judge-weight { display: grid; gap: 5px; margin: 0 8px 9px; }
 .judge-weight input { width: 100%; accent-color: #82c9b9; }
+.baseline-picker { display: grid; gap: 5px; margin: 0 8px 10px; }
+.baseline-picker span { color: #888; font-size: 9px; }
+.baseline-picker select { width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid #414141; border-radius: 7px; background: #252525; color: #bbb; font-size: 9px; }
 .eval-case-row { position: relative; display: grid; }
 .eval-case { display: grid; width: 100%; grid-template-columns: 20px minmax(0, 1fr); gap: 7px; padding: 9px 54px 9px 9px; border: 0; border-radius: 8px; background: transparent; color: #aaa; cursor: pointer; text-align: left; }
 .eval-case:hover, .eval-case--selected { background: #2c2c2c; }
@@ -469,6 +513,10 @@ onMounted(async () => {
 .eval-summary span { color: #888; font-size: 10px; }
 .eval-summary strong { color: #ddd; font-size: 18px; }
 .judge-banner { margin: -8px 0 14px; padding: 8px 11px; border: 1px solid #3d4946; border-radius: 8px; background: #26312f; color: #9dbab3; font-size: 10px; }
+.baseline-banner { display: flex; align-items: center; gap: 10px; margin: -8px 0 14px; padding: 9px 11px; border: 1px solid #3d4946; border-radius: 8px; background: #26312f; color: #9dbab3; font-size: 10px; }
+.baseline-banner b { color: #8fd1b2; }
+.baseline-banner .delta-negative { color: #e69a9a; }
+.baseline-banner small { margin-left: auto; color: #718c85; }
 .eval-results { display: grid; gap: 9px; }
 .eval-result { overflow: hidden; border: 1px solid #3b3b3b; border-radius: 10px; background: #262626; }
 .eval-result > header { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 11px 13px; }

@@ -47,13 +47,14 @@ test("sends optional LLM judge settings", async () => {
   try {
     const events = [];
     await runEvalStream(
-      ["case-1"], "sk-test", "", true, 0.6,
+      ["case-1"], "sk-test", "", true, 0.6, "baseline-1",
       (event) => events.push(event),
     );
     assert.deepEqual(JSON.parse(capturedOptions.body), {
       case_ids: ["case-1"],
       judge_enabled: true,
       judge_weight: 0.6,
+      baseline_run_id: "baseline-1",
     });
     assert.equal(events[0].type, "eval.completed");
   } finally {

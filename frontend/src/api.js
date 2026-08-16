@@ -162,6 +162,7 @@ export async function runEvalStream(
   tavilyApiKey,
   judgeEnabled,
   judgeWeight,
+  baselineRunId,
   onEvent,
   signal,
 ) {
@@ -177,6 +178,7 @@ export async function runEvalStream(
       case_ids: caseIds,
       judge_enabled: judgeEnabled,
       judge_weight: judgeWeight,
+      baseline_run_id: baselineRunId || null,
     }),
     signal,
   });

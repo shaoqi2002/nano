@@ -5,6 +5,7 @@ from pydantic import SecretStr
 
 from app.agent.structured import model_for_structured_output
 from app.eval.dataset import EVAL_FORM_OPTIONS, EvalCase, load_golden_dataset
+from app.eval.baseline import compare_case, compare_suite
 from app.eval.scorer import score_agent_output
 from app.eval.judge import JudgeVerdict, combine_with_judge
 from app.schema.evaluation import EvalCaseDefinition
@@ -13,6 +14,25 @@ import app.model  # noqa: F401
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_baseline_comparison_uses_only_matching_cases(self) -> None:
+        baseline_results = {
+            "one": {"score": 0.6, "passed": False},
+            "old-only": {"score": 1.0, "passed": True},
+        }
+
+        case = compare_case(0.8, baseline_results["one"])
+        suite = compare_suite(
+            run_id="baseline-run",
+            current_scores={"one": 0.8, "new-only": 0.2},
+            baseline_results=baseline_results,
+        )
+
+        self.assertEqual(case["score_delta"], 0.2)
+        self.assertEqual(suite["matched_case_count"], 1)
+        self.assertEqual(suite["baseline_score"], 0.6)
+        self.assertEqual(suite["current_score"], 0.8)
+        self.assertEqual(suite["score_delta"], 0.2)
+
     def test_builtin_case_exclusion_table_is_registered(self) -> None:
         self.assertIn("agent_eval_case_exclusions", Base.metadata.tables)
 

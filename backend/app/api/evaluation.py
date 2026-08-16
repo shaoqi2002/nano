@@ -172,6 +172,29 @@ async def create_eval_run_stream(
     if unknown:
         raise HTTPException(status_code=400, detail=f"Unknown eval cases: {unknown}")
     cases = [by_id[case_id] for case_id in selected_ids]
+    baseline_results: dict[str, dict] = {}
+    if body.baseline_run_id:
+        baseline_run = await get_eval_run(session, body.baseline_run_id)
+        if baseline_run is None:
+            raise HTTPException(status_code=400, detail="Baseline eval run not found")
+        if baseline_run.status != "completed" or baseline_run.score is None:
+            raise HTTPException(
+                status_code=400, detail="Baseline eval run must be completed"
+            )
+        baseline_results = {
+            result.case_id: {"score": result.score, "passed": result.passed}
+            for result in await list_eval_results(session, body.baseline_run_id)
+        }
+        if not any(case.id in baseline_results for case in cases):
+            raise HTTPException(
+                status_code=400,
+                detail="Baseline has no cases in common with this run",
+            )
+
+    # Finish the read transaction before the streaming service opens the
+    # write transaction that persists the run and its individual results.
+    if session.in_transaction():
+        await session.rollback()
 
     async def generate():
         stream = stream_eval_run(
@@ -183,6 +206,8 @@ async def create_eval_run_stream(
             checkpointer=request.app.state.agent_checkpointer,
             judge_enabled=body.judge_enabled,
             judge_weight=body.judge_weight,
+            baseline_run_id=body.baseline_run_id,
+            baseline_results=baseline_results,
         )
         pending: asyncio.Task | None = None
         active_run_id: UUID | None = None

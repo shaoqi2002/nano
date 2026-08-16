@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import build_agent_graph, initial_agent_state
 from app.core.config import DEEPSEEK_MODEL, EVAL_JUDGE_MODEL
+from app.eval.baseline import compare_case, compare_suite
 from app.eval.dataset import EvalCase
 from app.eval.judge import combine_with_judge, judge_agent_output
 from app.eval.scorer import score_agent_output
@@ -34,7 +35,20 @@ async def stream_eval_run(
     checkpointer: Any,
     judge_enabled: bool = False,
     judge_weight: float = 0.5,
+    baseline_run_id: UUID | None = None,
+    baseline_results: dict[str, dict[str, Any]] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
+    baseline_results = baseline_results or {}
+    baseline_stub = (
+        {
+            "run_id": str(baseline_run_id),
+            "matched_case_count": sum(
+                case.id in baseline_results for case in cases
+            ),
+        }
+        if baseline_run_id
+        else None
+    )
     async with session.begin():
         run = await create_eval_run(
             session,
@@ -47,6 +61,7 @@ async def stream_eval_run(
                 "judge_model": EVAL_JUDGE_MODEL if judge_enabled else None,
                 "judge_weight": judge_weight,
                 "case_snapshots": [case.model_dump() for case in cases],
+                "baseline": baseline_stub,
             },
         )
         run.status = "running"
@@ -56,11 +71,13 @@ async def stream_eval_run(
         "dataset_version": dataset_version,
         "case_count": len(cases),
         "judge_enabled": judge_enabled,
+        "baseline": baseline_stub,
     }
 
     suite_started = time.monotonic()
     scores: list[float] = []
     passed_count = 0
+    current_scores: dict[str, float] = {}
     model = create_model(api_key)
     judge_model = (
         ChatDeepSeek(
@@ -158,7 +175,19 @@ async def stream_eval_run(
                 "judge_duration_ms": max(0, duration_ms - agent_duration_ms),
             },
         )
+        if case.id in baseline_results:
+            scored = type(scored)(
+                passed=scored.passed,
+                score=scored.score,
+                metrics={
+                    **scored.metrics,
+                    "baseline": compare_case(
+                        scored.score, baseline_results[case.id]
+                    ),
+                },
+            )
         scores.append(scored.score)
+        current_scores[case.id] = scored.score
         if scored.passed:
             passed_count += 1
         async with session.begin():
@@ -192,6 +221,15 @@ async def stream_eval_run(
 
     duration_ms = round((time.monotonic() - suite_started) * 1000)
     suite_score = round(sum(scores) / max(len(scores), 1), 4)
+    baseline_comparison = (
+        compare_suite(
+            run_id=str(baseline_run_id),
+            current_scores=current_scores,
+            baseline_results=baseline_results,
+        )
+        if baseline_run_id
+        else None
+    )
     async with session.begin():
         current = await session.get(AgentEvalRun, run.id, with_for_update=True)
         if current is None:
@@ -201,6 +239,7 @@ async def stream_eval_run(
         current.score = suite_score
         current.duration_ms = duration_ms
         current.completed_at = _now()
+        current.config = {**current.config, "baseline": baseline_comparison}
     yield {
         "type": "eval.completed",
         "run": {
@@ -210,5 +249,6 @@ async def stream_eval_run(
             "passed_count": passed_count,
             "score": suite_score,
             "duration_ms": duration_ms,
+            "config": {"baseline": baseline_comparison},
         },
     }
