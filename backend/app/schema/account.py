@@ -39,3 +39,9 @@ class TavilyAccountUsage(BaseModel):
 class TavilyUsageResponse(BaseModel):
     key: TavilyKeyUsage
     account: TavilyAccountUsage
+
+
+class EmbeddingStatusResponse(BaseModel):
+    configured: bool
+    model: str
+    dimensions: int

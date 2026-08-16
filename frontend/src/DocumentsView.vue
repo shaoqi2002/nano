@@ -16,6 +16,7 @@ const emit = defineEmits(["back"]);
 const props = defineProps({
   initialDocumentId: { type: String, default: null },
   initialPage: { type: Number, default: null },
+  embeddingApiKey: { type: String, default: "" },
 });
 const documents = ref([]);
 const activeDocumentId = ref(null);
@@ -82,7 +83,7 @@ async function loadDocuments(background = false) {
   if (!background) isLoading.value = true;
   errorMessage.value = "";
   try {
-    documents.value = await listDocuments();
+    documents.value = await listDocuments(props.embeddingApiKey);
     if (!targetApplied && props.initialDocumentId && documents.value.some((item) => item.id === props.initialDocumentId)) {
       activeDocumentId.value = props.initialDocumentId;
       targetApplied = true;
@@ -101,7 +102,9 @@ async function reindexActiveDocument() {
   isReindexing.value = true;
   errorMessage.value = "";
   try {
-    const updated = await reindexDocument(activeDocument.value.id);
+    const updated = await reindexDocument(
+      activeDocument.value.id, props.embeddingApiKey
+    );
     const index = documents.value.findIndex((item) => item.id === updated.id);
     if (index >= 0) documents.value[index] = updated;
   } catch (error) {
@@ -118,7 +121,7 @@ async function handleUpload(event) {
   isUploading.value = true;
   errorMessage.value = "";
   try {
-    const document = await uploadDocument(file);
+    const document = await uploadDocument(file, props.embeddingApiKey);
     documents.value.unshift(document);
     activeDocumentId.value = document.id;
   } catch (error) {

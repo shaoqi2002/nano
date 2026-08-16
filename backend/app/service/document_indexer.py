@@ -17,6 +17,23 @@ from app.service.rag import PARSER_VERSION, parse_document_chunks
 logger = logging.getLogger(__name__)
 
 
+class DocumentIndexRequests:
+    """Keep per-document browser keys in memory without persisting secrets."""
+
+    def __init__(self) -> None:
+        self._keys: dict[UUID, str] = {}
+
+    def submit(self, document_id: UUID, api_key: str | None) -> None:
+        if api_key and api_key.strip():
+            self._keys[document_id] = api_key.strip()
+
+    def take(self) -> tuple[UUID, str] | None:
+        if not self._keys:
+            return None
+        document_id = next(iter(self._keys))
+        return document_id, self._keys.pop(document_id)
+
+
 async def reset_interrupted_jobs() -> None:
     async with SessionLocal() as session, session.begin():
         await session.execute(
@@ -26,12 +43,13 @@ async def reset_interrupted_jobs() -> None:
         )
 
 
-async def _claim_document() -> UUID | None:
+async def _claim_document(document_id: UUID | None = None) -> UUID | None:
     async with SessionLocal() as session, session.begin():
+        statement = select(Document).where(Document.index_status == "pending")
+        if document_id is not None:
+            statement = statement.where(Document.id == document_id)
         statement = (
-            select(Document)
-            .where(Document.index_status == "pending")
-            .order_by(Document.created_at)
+            statement.order_by(Document.created_at)
             .with_for_update(skip_locked=True)
             .limit(1)
         )
@@ -56,7 +74,9 @@ async def _set_failed(document_id: UUID, error: Exception) -> None:
             document.index_error = str(error)[:2000]
 
 
-async def _process_document(document_id: UUID) -> None:
+async def _process_document(
+    document_id: UUID, api_key: str | None = None
+) -> None:
     async with SessionLocal() as session:
         document = await session.get(Document, document_id)
         if document is None:
@@ -64,7 +84,7 @@ async def _process_document(document_id: UUID) -> None:
         path = await run_in_threadpool(cached_document_path, document)
         chunks = await run_in_threadpool(parse_document_chunks, document, path)
 
-    vectors = await embed_texts([chunk.content for chunk in chunks])
+    vectors = await embed_texts([chunk.content for chunk in chunks], api_key)
     async with SessionLocal() as session, session.begin():
         document = await session.get(Document, document_id, with_for_update=True)
         if document is None:
@@ -94,11 +114,25 @@ async def _process_document(document_id: UUID) -> None:
         document.embedding_model = EMBEDDING_MODEL
 
 
-async def indexing_worker(stop_event: asyncio.Event) -> None:
+async def indexing_worker(
+    stop_event: asyncio.Event,
+    requests: DocumentIndexRequests | None = None,
+) -> None:
     await reset_interrupted_jobs()
+    requests = requests or DocumentIndexRequests()
     warned_missing_key = False
     while not stop_event.is_set():
-        if not embedding_is_configured():
+        submitted = requests.take()
+        if submitted:
+            requested_id, requested_key = submitted
+            document_id = await _claim_document(requested_id)
+            if document_id:
+                try:
+                    await _process_document(document_id, requested_key)
+                except Exception as error:
+                    await _set_failed(document_id, error)
+                continue
+        elif not embedding_is_configured():
             if not warned_missing_key:
                 logger.warning("Document indexing is waiting for EMBEDDING_API_KEY")
                 warned_missing_key = True
@@ -117,4 +151,3 @@ async def indexing_worker(stop_event: asyncio.Event) -> None:
             )
         except TimeoutError:
             pass
-

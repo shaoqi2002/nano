@@ -8,6 +8,7 @@ import {
   documentContentUrl,
   getAgentRunEvents,
   getDeepSeekBalance,
+  getEmbeddingStatus,
   getEvalDataset,
   getTavilyUsage,
   sendMessage,
@@ -63,6 +64,27 @@ test("queries Tavily usage through the backend", async () => {
     await getTavilyUsage("tvly-usage");
     assert.equal(captured.url, "/api/account/tavily/usage");
     assert.equal(captured.options.headers["X-Tavily-API-Key"], "tvly-usage");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("validates the browser-configured embedding key", async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ configured: true, model: "text-embedding-v4" }),
+    };
+  };
+
+  try {
+    await getEmbeddingStatus("sk-embedding");
+    assert.equal(captured.url, "/api/account/embedding/status");
+    assert.equal(captured.options.headers["X-Embedding-API-Key"], "sk-embedding");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -190,12 +212,16 @@ test("sends the selected agent mode", async () => {
   };
 
   try {
-    await sendMessage("conversation-1", "research this", "sk-test", "", true, "research");
+    await sendMessage(
+      "conversation-1", "research this", "sk-test", "", true, "research",
+      "sk-embedding",
+    );
     assert.deepEqual(JSON.parse(capturedOptions.body), {
       message: "research this",
       use_rag: true,
       mode: "research",
     });
+    assert.equal(capturedOptions.headers["X-Embedding-API-Key"], "sk-embedding");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -215,9 +241,10 @@ test("uploads documents as multipart data without a JSON content type", async ()
 
   try {
     const file = new Blob(["hello"], { type: "text/plain" });
-    await uploadDocument(file);
+    await uploadDocument(file, "sk-embedding");
     assert.ok(capturedOptions.body instanceof FormData);
     assert.equal(capturedOptions.headers["Content-Type"], undefined);
+    assert.equal(capturedOptions.headers["X-Embedding-API-Key"], "sk-embedding");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -3,6 +3,7 @@ import hashlib
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from uuid import UUID
 
 from docx import Document as WordDocument
 
@@ -14,9 +15,23 @@ from app.service.document import (
     word_text,
 )
 from app.service.document_cache import DocumentCache, DocumentCacheError
+from app.service.document_indexer import DocumentIndexRequests
+from app.service.embedding import embedding_is_configured
 
 
 class DocumentServiceTests(unittest.TestCase):
+    def test_browser_embedding_key_can_configure_indexing(self) -> None:
+        self.assertTrue(embedding_is_configured("browser-key"))
+
+    def test_index_requests_deduplicate_document_keys(self) -> None:
+        requests = DocumentIndexRequests()
+        document_id = UUID("00000000-0000-0000-0000-000000000001")
+        requests.submit(document_id, "first-key")
+        requests.submit(document_id, "latest-key")
+
+        self.assertEqual(requests.take(), (document_id, "latest-key"))
+        self.assertIsNone(requests.take())
+
     def test_safe_filename_removes_client_paths(self) -> None:
         self.assertEqual(safe_filename("C:\\fakepath\\报告.pdf"), "报告.pdf")
         self.assertEqual(safe_filename("../../notes.md"), "notes.md")

@@ -7,6 +7,7 @@ import {
   getAgentRun,
   getAgentRunEvents,
   getDeepSeekBalance,
+  getEmbeddingStatus,
   getMessages,
   getTavilyUsage,
   listConversations,
@@ -21,6 +22,7 @@ import { renderMarkdown } from "./markdown";
 const ACTIVE_KEY = "nano-agent-active-conversation";
 const API_KEY_STORAGE_KEY = "nano-deepseek-api-key";
 const TAVILY_API_KEY_STORAGE_KEY = "nano-tavily-api-key";
+const EMBEDDING_API_KEY_STORAGE_KEY = "nano-embedding-api-key";
 const RAG_STORAGE_KEY = "nano-rag-enabled";
 const AGENT_MODE_STORAGE_KEY = "nano-agent-mode";
 const ACTIVE_RUN_STORAGE_KEY = "nano-agent-active-run";
@@ -40,6 +42,8 @@ const apiKey = ref(localStorage.getItem(API_KEY_STORAGE_KEY) || "");
 const apiKeyDraft = ref("");
 const tavilyApiKey = ref(localStorage.getItem(TAVILY_API_KEY_STORAGE_KEY) || "");
 const tavilyApiKeyDraft = ref("");
+const embeddingApiKey = ref(localStorage.getItem(EMBEDDING_API_KEY_STORAGE_KEY) || "");
+const embeddingApiKeyDraft = ref("");
 const apiKeyDialogOpen = ref(false);
 const apiBalance = ref(null);
 const apiBalanceLoading = ref(false);
@@ -49,6 +53,10 @@ const tavilyUsage = ref(null);
 const tavilyUsageLoading = ref(false);
 const tavilyUsageError = ref("");
 let tavilyUsageRequestId = 0;
+const embeddingStatus = ref(null);
+const embeddingStatusLoading = ref(false);
+const embeddingStatusError = ref("");
+let embeddingStatusRequestId = 0;
 const deletingConversationId = ref(null);
 const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
 const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
@@ -68,6 +76,14 @@ const canSend = computed(
   () => draft.value.trim().length > 0 && !isSending.value && activeConversationId.value,
 );
 
+const apiKeyStatusLabel = computed(() => {
+  const count = [apiKey.value, tavilyApiKey.value, embeddingApiKey.value]
+    .filter(Boolean).length;
+  if (!count) return "设置 API Key";
+  if (count === 1 && apiKey.value) return "DeepSeek 已配置";
+  return `${count} 个 API Keys 已配置`;
+});
+
 function rememberActiveConversation(id) {
   activeConversationId.value = id;
   localStorage.setItem(ACTIVE_KEY, id);
@@ -76,6 +92,7 @@ function rememberActiveConversation(id) {
 function openApiKeyDialog() {
   apiKeyDraft.value = apiKey.value;
   tavilyApiKeyDraft.value = tavilyApiKey.value;
+  embeddingApiKeyDraft.value = embeddingApiKey.value;
   apiKeyDialogOpen.value = true;
   sidebarOpen.value = false;
   if (apiKey.value) void refreshApiBalance(apiKey.value);
@@ -156,6 +173,33 @@ function usagePercent(usage, limit) {
   return Math.min(100, Math.max(0, (usage / limit) * 100));
 }
 
+async function verifyEmbeddingKey(key = embeddingApiKey.value) {
+  const value = key.trim();
+  if (!value) return;
+  const requestId = ++embeddingStatusRequestId;
+  embeddingStatusLoading.value = true;
+  embeddingStatusError.value = "";
+  try {
+    const status = await getEmbeddingStatus(value);
+    if (requestId === embeddingStatusRequestId) embeddingStatus.value = status;
+  } catch (error) {
+    if (requestId === embeddingStatusRequestId) {
+      embeddingStatus.value = null;
+      embeddingStatusError.value = error.message;
+    }
+  } finally {
+    if (requestId === embeddingStatusRequestId) embeddingStatusLoading.value = false;
+  }
+}
+
+function handleEmbeddingKeyDraftInput() {
+  if (embeddingApiKeyDraft.value.trim() === embeddingApiKey.value) return;
+  embeddingStatusRequestId += 1;
+  embeddingStatusLoading.value = false;
+  embeddingStatus.value = null;
+  embeddingStatusError.value = "";
+}
+
 function saveApiKey() {
   const value = apiKeyDraft.value.trim();
   if (!value) return;
@@ -168,6 +212,12 @@ function saveApiKey() {
   } else {
     localStorage.removeItem(TAVILY_API_KEY_STORAGE_KEY);
   }
+  embeddingApiKey.value = embeddingApiKeyDraft.value.trim();
+  if (embeddingApiKey.value) {
+    localStorage.setItem(EMBEDDING_API_KEY_STORAGE_KEY, embeddingApiKey.value);
+  } else {
+    localStorage.removeItem(EMBEDDING_API_KEY_STORAGE_KEY);
+  }
   apiKeyDialogOpen.value = false;
   errorMessage.value = "";
 }
@@ -175,17 +225,23 @@ function saveApiKey() {
 function clearApiKey() {
   apiBalanceRequestId += 1;
   tavilyUsageRequestId += 1;
+  embeddingStatusRequestId += 1;
   apiKey.value = "";
   apiKeyDraft.value = "";
   tavilyApiKey.value = "";
   tavilyApiKeyDraft.value = "";
+  embeddingApiKey.value = "";
+  embeddingApiKeyDraft.value = "";
   localStorage.removeItem(API_KEY_STORAGE_KEY);
   localStorage.removeItem(TAVILY_API_KEY_STORAGE_KEY);
+  localStorage.removeItem(EMBEDDING_API_KEY_STORAGE_KEY);
   apiKeyDialogOpen.value = false;
   apiBalance.value = null;
   apiBalanceError.value = "";
   tavilyUsage.value = null;
   tavilyUsageError.value = "";
+  embeddingStatus.value = null;
+  embeddingStatusError.value = "";
 }
 
 function formatDate(value) {
@@ -476,6 +532,7 @@ async function submitMessage() {
       tavilyApiKey.value,
       useRag.value,
       agentMode.value,
+      embeddingApiKey.value,
       (event) => handleStreamEvent(streamingMessage, event),
       streamController.value.signal,
     );
@@ -730,7 +787,7 @@ onMounted(async () => {
 
       <button class="sidebar__footer" @click="openApiKeyDialog">
         <span class="status-dot" :class="{ 'status-dot--configured': apiKey }" />
-        <span>{{ apiKey && tavilyApiKey ? "API Keys 已配置" : apiKey ? "DeepSeek 已配置" : "设置 API Key" }}</span>
+        <span>{{ apiKeyStatusLabel }}</span>
       </button>
     </aside>
 
@@ -914,6 +971,7 @@ onMounted(async () => {
       v-else-if="activeView === 'documents'"
       :initial-document-id="documentTarget.id"
       :initial-page="documentTarget.page"
+      :embedding-api-key="embeddingApiKey"
       @back="activeView = 'chat'"
     />
 
@@ -1038,6 +1096,40 @@ onMounted(async () => {
           </div>
           <p v-else-if="!tavilyUsageLoading" class="api-balance-placeholder">
             点击查询余量验证 Tavily Key。
+          </p>
+        </section>
+        <label class="api-key-field">
+          <span>阿里云百炼 Embedding API Key（可选）</span>
+          <input
+            v-model="embeddingApiKeyDraft"
+            type="password"
+            autocomplete="off"
+            placeholder="sk-..."
+            aria-label="阿里云百炼 Embedding API Key"
+            @input="handleEmbeddingKeyDraftInput"
+          />
+        </label>
+        <section v-if="embeddingApiKeyDraft.trim()" class="api-balance-card embedding-status-card">
+          <header>
+            <div>
+              <strong>百炼 Embedding</strong>
+              <small>用于文档索引与 RAG 查询向量化</small>
+            </div>
+            <button
+              type="button"
+              class="balance-refresh"
+              :disabled="embeddingStatusLoading"
+              @click="verifyEmbeddingKey(embeddingApiKeyDraft)"
+            >{{ embeddingStatusLoading ? "验证中…" : "验证配置" }}</button>
+          </header>
+          <p v-if="embeddingStatusError" class="api-balance-error">{{ embeddingStatusError }}</p>
+          <div v-else-if="embeddingStatus" class="embedding-status-result">
+            <span class="api-balance-status">配置可用</span>
+            <strong>{{ embeddingStatus.model }}</strong>
+            <small>{{ embeddingStatus.dimensions }} 维 · 验证会产生一次极小的 Embedding 调用</small>
+          </div>
+          <p v-else-if="!embeddingStatusLoading" class="api-balance-placeholder">
+            Key 仅保存在当前浏览器；服务器环境变量仍可作为后备配置。
           </p>
         </section>
         <div class="api-key-dialog__actions">

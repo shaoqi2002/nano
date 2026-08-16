@@ -156,13 +156,17 @@ def parse_document_chunks(document: Document, path: Path) -> list[ParsedChunk]:
     return chunks
 
 
-async def retrieve_sources(session: AsyncSession, query: str) -> list[dict]:
+async def retrieve_sources(
+    session: AsyncSession,
+    query: str,
+    embedding_api_key: str | None = None,
+) -> list[dict]:
     ready_document = await session.scalar(
         select(Document.id).where(Document.index_status == "ready").limit(1)
     )
     if ready_document is None:
         return []
-    query_vector = (await embed_texts([query]))[0]
+    query_vector = (await embed_texts([query], embedding_api_key))[0]
     distance = DocumentChunk.embedding.cosine_distance(query_vector)
     statement = (
         select(DocumentChunk, Document, distance.label("distance"))

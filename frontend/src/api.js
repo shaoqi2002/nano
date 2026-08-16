@@ -35,6 +35,12 @@ export function getTavilyUsage(apiKey) {
   });
 }
 
+export function getEmbeddingStatus(apiKey) {
+  return request("/account/embedding/status", {
+    headers: { "X-Embedding-API-Key": apiKey },
+  });
+}
+
 export function listConversations() {
   return request("/conversations");
 }
@@ -43,13 +49,14 @@ export function getMessages(conversationId) {
   return request(`/conversations/${conversationId}/messages`);
 }
 
-export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true, mode = "auto") {
+export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true, mode = "auto", embeddingApiKey = "") {
   const headers = {
     "X-DeepSeek-API-Key": apiKey,
   };
   if (tavilyApiKey) {
     headers["X-Tavily-API-Key"] = tavilyApiKey;
   }
+  if (embeddingApiKey) headers["X-Embedding-API-Key"] = embeddingApiKey;
 
   return request(`/conversations/${conversationId}/messages`, {
     method: "POST",
@@ -98,6 +105,7 @@ export async function sendMessageStream(
   tavilyApiKey,
   useRag,
   mode,
+  embeddingApiKey,
   onEvent,
   signal,
 ) {
@@ -106,6 +114,7 @@ export async function sendMessageStream(
     "X-DeepSeek-API-Key": apiKey,
   };
   if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
+  if (embeddingApiKey) headers["X-Embedding-API-Key"] = embeddingApiKey;
 
   const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages/stream`, {
     method: "POST",
@@ -220,22 +229,31 @@ export function deleteConversation(conversationId) {
   return request(`/conversations/${conversationId}`, { method: "DELETE" });
 }
 
-export function listDocuments() {
-  return request("/documents");
+export function listDocuments(embeddingApiKey = "") {
+  return request("/documents", {
+    headers: embeddingApiKey ? { "X-Embedding-API-Key": embeddingApiKey } : {},
+  });
 }
 
-export function uploadDocument(file) {
+export function uploadDocument(file, embeddingApiKey = "") {
   const body = new FormData();
   body.append("file", file);
-  return request("/documents", { method: "POST", body });
+  return request("/documents", {
+    method: "POST",
+    body,
+    headers: embeddingApiKey ? { "X-Embedding-API-Key": embeddingApiKey } : {},
+  });
 }
 
 export function deleteDocument(documentId) {
   return request(`/documents/${documentId}`, { method: "DELETE" });
 }
 
-export function reindexDocument(documentId) {
-  return request(`/documents/${documentId}/reindex`, { method: "POST" });
+export function reindexDocument(documentId, embeddingApiKey = "") {
+  return request(`/documents/${documentId}/reindex`, {
+    method: "POST",
+    headers: embeddingApiKey ? { "X-Embedding-API-Key": embeddingApiKey } : {},
+  });
 }
 
 export function documentContentUrl(documentId, download = false) {

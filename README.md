@@ -34,6 +34,7 @@ Supervisor（拆解任务并选择 specialist）
 - 版本化 golden dataset、规则评分和 LLM-as-a-judge 评测
 - Form.io schema 驱动的自定义评测用例，以及安全 Markdown 评分/输出
 - 可追溯 URL 引用评分，以及 multi-agent 瞬时/持续故障注入回归用例
+- 浏览器端 DeepSeek、Tavily 与百炼 Embedding Key 配置及服务状态检查
 - Eval 历史运行 baseline 对比，支持总分与逐用例回归差值
 - FastAPI + SQLAlchemy + PostgreSQL/pgvector 后端，Vue 3 前端
 - CI 测试门禁、完整 Compose 冒烟测试、SBOM 和 Git SHA 不可变镜像

@@ -9,7 +9,7 @@ from psycopg_pool import AsyncConnectionPool
 from app.api import api_router
 from app.core.config import LANGGRAPH_DATABASE_URL, LANGGRAPH_POOL_SIZE
 from app.core.database import close_database, create_tables
-from app.service.document_indexer import indexing_worker
+from app.service.document_indexer import DocumentIndexRequests, indexing_worker
 
 
 @asynccontextmanager
@@ -30,8 +30,12 @@ async def lifespan(app: FastAPI):
     checkpointer = AsyncPostgresSaver(checkpointer_pool)
     await checkpointer.setup()
     app.state.agent_checkpointer = checkpointer
+    document_index_requests = DocumentIndexRequests()
+    app.state.document_index_requests = document_index_requests
     stop_event = asyncio.Event()
-    worker = asyncio.create_task(indexing_worker(stop_event))
+    worker = asyncio.create_task(
+        indexing_worker(stop_event, document_index_requests)
+    )
     try:
         yield
     finally:

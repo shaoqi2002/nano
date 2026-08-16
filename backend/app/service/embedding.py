@@ -20,20 +20,23 @@ class EmbeddingServiceError(RuntimeError):
     pass
 
 
-def embedding_is_configured() -> bool:
-    return bool(EMBEDDING_API_KEY.strip() and EMBEDDING_BASE_URL.strip())
+def embedding_is_configured(api_key: str | None = None) -> bool:
+    return bool((api_key or EMBEDDING_API_KEY).strip() and EMBEDDING_BASE_URL.strip())
 
 
-async def embed_texts(texts: Sequence[str]) -> list[list[float]]:
+async def embed_texts(
+    texts: Sequence[str], api_key: str | None = None
+) -> list[list[float]]:
     if not texts:
         return []
-    if not embedding_is_configured():
+    resolved_api_key = (api_key or EMBEDDING_API_KEY).strip()
+    if not embedding_is_configured(resolved_api_key):
         raise EmbeddingConfigurationError("尚未配置 EMBEDDING_API_KEY")
 
     vectors: list[list[float]] = []
     batch_size = max(1, EMBEDDING_BATCH_SIZE)
     url = f"{EMBEDDING_BASE_URL.rstrip('/')}/embeddings"
-    headers = {"Authorization": f"Bearer {EMBEDDING_API_KEY}"}
+    headers = {"Authorization": f"Bearer {resolved_api_key}"}
 
     async with httpx.AsyncClient(timeout=EMBEDDING_TIMEOUT_SECONDS) as client:
         for offset in range(0, len(texts), batch_size):
@@ -67,4 +70,3 @@ async def embed_texts(texts: Sequence[str]) -> list[list[float]]:
                 )
             vectors.extend(batch_vectors)
     return vectors
-

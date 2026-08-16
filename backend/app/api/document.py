@@ -5,8 +5,10 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Header,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -45,15 +47,31 @@ def storage_http_error(error: Exception) -> HTTPException:
 
 
 @router.get("", response_model=list[DocumentResponse])
-async def read_documents(session: SessionDependency) -> list[DocumentResponse]:
+async def read_documents(
+    request: Request,
+    session: SessionDependency,
+    embedding_api_key: Annotated[
+        str | None, Header(alias="X-Embedding-API-Key", min_length=1)
+    ] = None,
+) -> list[DocumentResponse]:
     documents = await get_documents(session)
+    if embedding_api_key:
+        for document in documents:
+            if document.index_status == "pending":
+                request.app.state.document_index_requests.submit(
+                    document.id, embedding_api_key
+                )
     return [DocumentResponse.model_validate(document) for document in documents]
 
 
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    request: Request,
     session: SessionDependency,
     file: Annotated[UploadFile, File(...)],
+    embedding_api_key: Annotated[
+        str | None, Header(alias="X-Embedding-API-Key", min_length=1)
+    ] = None,
 ) -> DocumentResponse:
     try:
         document = await create_document(session, file)
@@ -63,6 +81,9 @@ async def upload_document(
         raise storage_http_error(error) from error
     finally:
         await file.close()
+    request.app.state.document_index_requests.submit(
+        document.id, embedding_api_key
+    )
     return DocumentResponse.model_validate(document)
 
 
@@ -133,7 +154,11 @@ async def remove_document_endpoint(
 @router.post("/{document_id}/reindex", response_model=DocumentResponse)
 async def reindex_document_endpoint(
     document_id: UUID,
+    request: Request,
     session: SessionDependency,
+    embedding_api_key: Annotated[
+        str | None, Header(alias="X-Embedding-API-Key", min_length=1)
+    ] = None,
 ) -> DocumentResponse:
     try:
         document = await reindex_document(session, document_id)
@@ -141,4 +166,7 @@ async def reindex_document_endpoint(
         raise HTTPException(status_code=404, detail="Document not found") from error
     except InvalidDocumentError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    request.app.state.document_index_requests.submit(
+        document.id, embedding_api_key
+    )
     return DocumentResponse.model_validate(document)
