@@ -12,6 +12,7 @@ from langgraph.types import Send
 from app.agent.state import AgentState, ResearchPlan, ReviewResult, SpecialistRole
 from app.agent.structured import with_structured_output
 from app.eval.citations import extract_urls
+from app.tooling import ToolContext, ToolRegistry
 from app.core.config import (
     AGENT_MAX_RESEARCH_RETRIES,
     AGENT_MAX_REVISIONS,
@@ -47,26 +48,27 @@ SPECIALIST_PROMPTS: dict[SpecialistRole, str] = {
     ),
 }
 
-SPECIALIST_TOOL_ALLOWLIST: dict[SpecialistRole, set[str]] = {
+LEGACY_SPECIALIST_ALLOWLIST: dict[SpecialistRole, set[str]] = {
     "web_researcher": {"web_search", "web_extract"},
     "document_analyst": set(),
     "general_researcher": {"web_search", "web_extract"},
 }
 
-
 def select_specialist_tools(
     role: SpecialistRole,
     preferred_tools: list[str],
-    tools: list[BaseTool],
+    tools: ToolRegistry | list[BaseTool],
 ) -> list[BaseTool]:
     """Apply server-side tool permissions to a supervisor assignment."""
-    allowed = SPECIALIST_TOOL_ALLOWLIST[role]
-    requested = set(preferred_tools)
-    return [
-        tool
-        for tool in tools
-        if tool.name in allowed and (not requested or tool.name in requested)
-    ]
+    if not isinstance(tools, ToolRegistry):
+        allowed = LEGACY_SPECIALIST_ALLOWLIST[role]
+        requested = set(preferred_tools)
+        return [
+            tool for tool in tools
+            if tool.name in allowed and (not requested or tool.name in requested)
+        ]
+    registry = tools
+    return registry.langchain_tools(role, preferred_tools)
 
 
 def resolve_agent_mode(requested: str, query: str) -> str:
@@ -119,31 +121,38 @@ def _result_text(result: Any) -> str:
 
 
 async def _run_tool(
-    call: dict[str, Any], tools_by_name: dict[str, BaseTool], allowed: bool
-) -> tuple[ToolMessage, bool]:
+    call: dict[str, Any], registry: ToolRegistry, context: ToolContext, allowed: bool
+) -> tuple[ToolMessage, bool, dict[str, Any]]:
     call_id = str(call.get("id") or "unknown-tool-call")
     name = str(call.get("name") or "")
     failed = False
+    metadata: dict[str, Any] = {}
     if not allowed:
         content = "工具调用次数已达到上限，请基于已有信息回答。"
         failed = True
-    elif name not in tools_by_name:
+    elif registry.get(name) is None:
         content = f"未知工具：{name}"
         failed = True
     else:
         try:
-            content = _result_text(
-                await tools_by_name[name].ainvoke(call.get("args") or {})
+            execution = await registry.executor.execute(
+                registry.get(name), call.get("args") or {}, context, call_id=call_id
             )
+            content = _result_text(execution.value)
+            metadata = {
+                "tool_version": execution.tool_version,
+                "risk_level": execution.risk_level,
+                "attempts": execution.attempts,
+            }
         except Exception as error:
             content = f"工具执行失败：{error}"
             failed = True
-    return ToolMessage(content=content, tool_call_id=call_id, name=name or None), failed
+    return ToolMessage(content=content, tool_call_id=call_id, name=name or None), failed, metadata
 
 
 def build_agent_graph(
     model: Any,
-    tools: list[BaseTool],
+    tools: ToolRegistry | list[BaseTool],
     mode: str,
     checkpointer: Any = None,
 ):
@@ -154,9 +163,10 @@ def build_agent_graph(
     )
 
 
-def _build_chat_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
-    tool_model = model.bind_tools(tools) if tools else model
-    tools_by_name = {tool.name: tool for tool in tools}
+def _build_chat_graph(model: Any, tools: ToolRegistry | list[BaseTool]) -> StateGraph:
+    registry = tools if isinstance(tools, ToolRegistry) else ToolRegistry.from_tools(tools)
+    visible_tools = registry.langchain_tools("chat_agent")
+    tool_model = model.bind_tools(visible_tools) if visible_tools else model
 
     async def call_agent(state: AgentState) -> AgentState:
         writer = get_stream_writer()
@@ -195,6 +205,11 @@ def _build_chat_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
 
     async def execute_tools(state: AgentState) -> AgentState:
         writer = get_stream_writer()
+        context = ToolContext(
+            run_id=state["run_id"],
+            conversation_id=state["conversation_id"],
+            agent_role="chat_agent",
+        )
         response = state["messages"][-1]
         if not isinstance(response, AIMessage):
             return {}
@@ -213,17 +228,18 @@ def _build_chat_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
                 "input": call.get("args") or {},
             })
             jobs.append((call, allowed, time.monotonic(), asyncio.create_task(
-                _run_tool(call, tools_by_name, allowed)
+                _run_tool(call, registry, context, allowed)
             )))
         results = await asyncio.gather(*(job[3] for job in jobs))
         messages: list[ToolMessage] = []
-        for (call, _allowed, started, _job), (message, failed) in zip(jobs, results):
+        for (call, _allowed, started, _job), (message, failed, metadata) in zip(jobs, results):
             messages.append(message)
             event = {
                 "type": "tool.failed" if failed else "tool.completed",
                 "call_id": str(call.get("id") or "unknown"),
                 "name": str(call.get("name") or "unknown"),
                 "duration_ms": round((time.monotonic() - started) * 1000),
+                **metadata,
             }
             if failed:
                 event["message"] = str(message.content)
@@ -273,7 +289,9 @@ def _build_chat_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
     return graph
 
 
-def _build_research_graph(model: Any, tools: list[BaseTool]) -> StateGraph:
+def _build_research_graph(
+    model: Any, tools: ToolRegistry | list[BaseTool]
+) -> StateGraph:
     research_tools = [tool for tool in tools if tool.name != "deep_research"]
 
     async def planner(state: AgentState) -> AgentState:

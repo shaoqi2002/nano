@@ -28,7 +28,7 @@ from app.service.conversation import (
 )
 from app.service.embedding import EmbeddingConfigurationError, EmbeddingServiceError
 from app.service.rag import build_rag_context, public_sources, retrieve_sources
-from app.tools import create_tools
+from app.tools import create_tool_registry
 from app.core.config import CHAT_CONTEXT_MESSAGE_LIMIT
 
 
@@ -310,7 +310,7 @@ async def _stream_graph(
     sources: list[dict],
 ) -> AsyncIterator[dict[str, Any]]:
     graph = build_agent_graph(
-        create_model(api_key), create_tools(tavily_api_key), run.mode, checkpointer
+        create_model(api_key), create_tool_registry(tavily_api_key), run.mode, checkpointer
     )
     config = {"configurable": {"thread_id": str(run.id)}}
     progress = list(run.progress or [])
