@@ -3,11 +3,22 @@ from langchain_core.tools import BaseTool
 from app.tools.deep_research import create_deep_research_tool
 from app.tools.webextract import create_web_extract_tool
 from app.tools.websearch import create_web_search_tool
+from app.tools.local_read import create_local_read_tools
 from app.tooling import ToolRegistry, ToolSpec
 
 
 def create_tool_registry(tavily_api_key: str | None) -> ToolRegistry:
     registry = ToolRegistry()
+    for tool in create_local_read_tools():
+        registry.register(ToolSpec(
+            name=tool.name,
+            version="1.0.0",
+            tool=tool,
+            category="local",
+            timeout_seconds=10.0,
+            allowed_agents=frozenset({"chat_agent"}),
+            tags=frozenset({"local", "readonly"}),
+        ))
     if not tavily_api_key or not tavily_api_key.strip():
         return registry
     web_roles = frozenset({"chat_agent", "web_researcher", "general_researcher"})

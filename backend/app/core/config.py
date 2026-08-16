@@ -56,6 +56,11 @@ DOCUMENT_CACHE_DIR = Path(os.getenv("DOCUMENT_CACHE_DIR", "/data/document-cache"
 DOCUMENT_CACHE_MAX_BYTES = int(
     os.getenv("DOCUMENT_CACHE_MAX_BYTES", str(5 * 1024 * 1024 * 1024))
 )
+AGENT_WORKSPACE_DIR = Path(
+    os.getenv("AGENT_WORKSPACE_DIR", "/data/agent-workspace")
+)
+LOCAL_READ_MAX_CHARS = int(os.getenv("LOCAL_READ_MAX_CHARS", "50000"))
+LOCAL_SEARCH_MAX_RESULTS = int(os.getenv("LOCAL_SEARCH_MAX_RESULTS", "100"))
 EMBEDDING_BASE_URL = os.getenv(
     "EMBEDDING_BASE_URL",
     "https://dashscope.aliyuncs.com/compatible-mode/v1",
