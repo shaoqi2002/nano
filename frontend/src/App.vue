@@ -113,6 +113,7 @@ async function scrollToBottom() {
 
 async function startNewConversation() {
   if (isLoading.value || isSending.value) return;
+  if (activeConversationId.value && messages.value.length === 0) return;
 
   activeView.value = "chat";
   errorMessage.value = "";
