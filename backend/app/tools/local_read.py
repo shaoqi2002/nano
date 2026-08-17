@@ -17,6 +17,12 @@ class LocalPathError(ValueError):
     pass
 
 
+def ensure_workspace_directory() -> Path:
+    """Create the configured sandbox root before any Agent tool can use it."""
+    AGENT_WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    return AGENT_WORKSPACE_DIR.resolve()
+
+
 def resolve_workspace_path(relative_path: str = ".") -> Path:
     root = AGENT_WORKSPACE_DIR.resolve()
     candidate = (root / relative_path).resolve()
@@ -88,7 +94,12 @@ def local_list_files(relative_path: str = ".", max_entries: int = 100) -> dict:
     """列出 Agent 工作区内一个目录的文件；路径必须相对于受限工作区。"""
     path = resolve_workspace_path(relative_path)
     if not path.is_dir():
-        raise LocalPathError("目录不存在")
+        return {
+            "entries": [],
+            "truncated": False,
+            "exists": False,
+            "message": "目录不存在；如需写入可直接创建目标文件及其父目录",
+        }
     limit = min(max(1, max_entries), LOCAL_SEARCH_MAX_RESULTS)
     entries = []
     for item in sorted(path.iterdir(), key=lambda value: (not value.is_dir(), value.name.lower())):
@@ -101,7 +112,7 @@ def local_list_files(relative_path: str = ".", max_entries: int = 100) -> dict:
         })
         if len(entries) >= limit:
             break
-    return {"entries": entries, "truncated": len(entries) >= limit}
+    return {"entries": entries, "truncated": len(entries) >= limit, "exists": True}
 
 
 @tool
@@ -137,7 +148,12 @@ def local_search_files(
     """按文件名 glob 在 Agent 工作区内递归搜索文件，例如 *.md。"""
     root = resolve_workspace_path(relative_path)
     if not root.is_dir():
-        raise LocalPathError("目录不存在")
+        return {
+            "matches": [],
+            "truncated": False,
+            "exists": False,
+            "message": "搜索目录不存在",
+        }
     limit = min(max(1, max_results), LOCAL_SEARCH_MAX_RESULTS)
     matches = []
     for current, directories, filenames in os.walk(root, followlinks=False):
@@ -152,8 +168,8 @@ def local_search_files(
                     "size_bytes": path.stat().st_size,
                 })
                 if len(matches) >= limit:
-                    return {"matches": matches, "truncated": True}
-    return {"matches": matches, "truncated": False}
+                    return {"matches": matches, "truncated": True, "exists": True}
+    return {"matches": matches, "truncated": False, "exists": True}
 
 
 def create_local_read_tools():

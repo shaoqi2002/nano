@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from app.tools.local_read import (
     LocalPathError,
+    ensure_workspace_directory,
     local_list_files,
     local_read_text,
     local_search_files,
@@ -31,6 +32,17 @@ class LocalReadToolTests(unittest.TestCase):
             with patch("app.tools.local_read.AGENT_WORKSPACE_DIR", Path(directory)):
                 with self.assertRaises(LocalPathError):
                     local_read_text.invoke({"relative_path": "../secret.txt"})
+
+    def test_initializes_workspace_and_missing_subdirectory_is_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "workspace"
+            with patch("app.tools.local_read.AGENT_WORKSPACE_DIR", root):
+                self.assertEqual(ensure_workspace_directory(), root.resolve())
+                result = local_list_files.invoke({"relative_path": "not-created"})
+
+            self.assertTrue(root.is_dir())
+            self.assertFalse(result["exists"])
+            self.assertEqual(result["entries"], [])
 
 
 if __name__ == "__main__":

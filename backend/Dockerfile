@@ -5,6 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN mkdir -p /data/agent-workspace /data/document-cache
+
 COPY requirements.txt ./
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libreoffice-writer poppler-utils fonts-noto-cjk \
