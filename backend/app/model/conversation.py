@@ -43,6 +43,9 @@ class Message(Base):
     sources: Mapped[list[dict]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    options: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

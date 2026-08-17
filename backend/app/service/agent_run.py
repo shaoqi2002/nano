@@ -140,6 +140,8 @@ async def _prepare_run(
     conversation_id: UUID,
     content: str,
     requested_mode: str,
+    use_rag: bool,
+    allow_write_tools: bool,
 ) -> tuple[AgentRun, list]:
     mode = resolve_agent_mode(requested_mode, content)
     async with session.begin():
@@ -149,7 +151,17 @@ async def _prepare_run(
         history = await list_recent_messages(
             session, conversation_id, CHAT_CONTEXT_MESSAGE_LIMIT
         )
-        user_message = await add_message(session, conversation_id, "user", content)
+        user_message = await add_message(
+            session,
+            conversation_id,
+            "user",
+            content,
+            options={
+                "mode": requested_mode,
+                "use_rag": use_rag,
+                "allow_write_tools": allow_write_tools,
+            },
+        )
         run = await create_agent_run(
             session, conversation_id, user_message.id, content, mode
         )
@@ -193,7 +205,12 @@ async def stream_new_run(
     allow_write_tools: bool = False,
 ) -> AsyncIterator[dict[str, Any]]:
     run, history = await _prepare_run(
-        session, conversation_id, content, requested_mode
+        session,
+        conversation_id,
+        content,
+        requested_mode,
+        use_rag,
+        allow_write_tools,
     )
     sources: list[dict] = []
     yield {

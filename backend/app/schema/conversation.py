@@ -29,6 +29,7 @@ class MessageResponse(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     sources: list[RagSourceResponse] = Field(default_factory=list)
+    options: dict = Field(default_factory=dict)
     created_at: datetime
     run_id: UUID | None = None
 

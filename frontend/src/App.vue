@@ -369,6 +369,10 @@ function setAgentMode(mode) {
   localStorage.setItem(AGENT_MODE_STORAGE_KEY, mode);
 }
 
+function messageModeLabel(mode) {
+  return ({ auto: "自动", chat: "快速回答", research: "深度研究" })[mode] || mode;
+}
+
 async function removeConversation(id) {
   const conversation = conversations.value.find((item) => item.id === id);
   if (!window.confirm(`删除“${conversation?.title || "该对话"}”及其全部消息？`)) return;
@@ -517,11 +521,17 @@ async function submitMessage() {
   }
 
   const conversationId = activeConversationId.value;
+  const writeToolsAuthorized = allowWriteTools.value;
   const optimisticMessage = {
     id: `local-${Date.now()}`,
     role: "user",
     content,
     created_at: new Date().toISOString(),
+    options: {
+      mode: agentMode.value,
+      use_rag: useRag.value,
+      allow_write_tools: writeToolsAuthorized,
+    },
   };
   const streamingMessage = reactive({
     id: `stream-${Date.now()}`,
@@ -538,7 +548,6 @@ async function submitMessage() {
   messages.value.push(optimisticMessage, streamingMessage);
   updateConversationTitle(content);
   draft.value = "";
-  const writeToolsAuthorized = allowWriteTools.value;
   allowWriteTools.value = false;
   errorMessage.value = "";
   isSending.value = true;
@@ -892,6 +901,14 @@ onMounted(async () => {
                 v-html="renderMarkdown(message.content)"
               />
               <div v-else class="message__content">{{ message.content }}</div>
+              <div
+                v-if="message.role === 'user' && message.options?.mode"
+                class="message-options"
+              >
+                <span>{{ messageModeLabel(message.options.mode) }}</span>
+                <span v-if="message.options.use_rag">文档 RAG</span>
+                <span v-if="message.options.allow_write_tools">写工具</span>
+              </div>
               <div v-if="message.role === 'assistant' && message.sources?.length" class="message-sources">
                 <button
                   v-for="source in message.sources"
