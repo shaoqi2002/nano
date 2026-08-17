@@ -133,6 +133,26 @@ async def create_document(
             except DocumentCacheError:
                 logger.warning("Unable to remove failed upload cache", exc_info=True)
         raise
+    document = Document(
+        id=document_id,
+        original_name=original_name,
+        object_key=object_key,
+        content_type=content_type,
+        preview_kind=preview_kind,
+        size_bytes=size,
+        checksum_sha256=digest.hexdigest(),
+    )
+
+    try:
+        async with session.begin():
+            return await add_document(session, document)
+    except Exception:
+        await run_in_threadpool(delete_object, object_key)
+        try:
+            await run_in_threadpool(document_cache.remove, object_key)
+        except DocumentCacheError:
+            logger.warning("Unable to remove rolled-back document cache", exc_info=True)
+        raise
 
 
 async def create_document_from_path(
@@ -188,28 +208,6 @@ async def create_document_from_path(
             except DocumentCacheError:
                 logger.warning("Unable to remove generated document cache", exc_info=True)
         raise
-    document = Document(
-        id=document_id,
-        original_name=original_name,
-        object_key=object_key,
-        content_type=content_type,
-        preview_kind=preview_kind,
-        size_bytes=size,
-        checksum_sha256=digest.hexdigest(),
-    )
-
-    try:
-        async with session.begin():
-            return await add_document(session, document)
-    except Exception:
-        await run_in_threadpool(delete_object, object_key)
-        try:
-            await run_in_threadpool(document_cache.remove, object_key)
-        except DocumentCacheError:
-            logger.warning("Unable to remove rolled-back document cache", exc_info=True)
-        raise
-
-
 async def get_documents(session: AsyncSession) -> list[Document]:
     return await list_documents(session)
 

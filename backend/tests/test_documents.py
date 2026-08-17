@@ -4,16 +4,32 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import UUID
+from unittest.mock import AsyncMock, patch
 
 from docx import Document as WordDocument
+from fastapi import UploadFile
 
 from app.service.document import (
     InvalidDocumentError,
+    create_document,
     decode_text,
     preview_kind_for,
     safe_filename,
     word_text,
 )
+
+
+class AsyncTransaction:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+
+class FakeSession:
+    def begin(self):
+        return AsyncTransaction()
 from app.service.document_cache import DocumentCache, DocumentCacheError
 from app.service.document_indexer import DocumentIndexRequests
 from app.service.embedding import (
@@ -93,6 +109,31 @@ class DocumentServiceTests(unittest.TestCase):
 
         self.assertIn("标题", extracted)
         self.assertIn("名称\tNano", extracted)
+
+
+class DocumentUploadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_upload_returns_persisted_document(self) -> None:
+        payload = "上传回归测试".encode()
+        upload = UploadFile(filename="notes.txt", file=BytesIO(payload))
+        persisted = AsyncMock(side_effect=lambda _session, document: document)
+
+        with (
+            TemporaryDirectory() as directory,
+            patch(
+                "app.service.document.document_cache.store_stream",
+                return_value=Path(directory) / "cached.txt",
+            ),
+            patch("app.service.document.upload_path") as upload_path_mock,
+            patch("app.service.document.add_document", persisted),
+        ):
+            document = await create_document(FakeSession(), upload)
+
+        self.assertIsNotNone(document)
+        self.assertEqual(document.original_name, "notes.txt")
+        self.assertEqual(document.size_bytes, len(payload))
+        self.assertEqual(document.checksum_sha256, hashlib.sha256(payload).hexdigest())
+        upload_path_mock.assert_called_once()
+        persisted.assert_awaited_once()
 
 
 
