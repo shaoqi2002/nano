@@ -804,7 +804,7 @@ onMounted(async () => {
         @click="openJobApplications"
       >
         <span class="new-chat-button__icon">▦</span>
-        秋招投递
+        求职投递
       </button>
 
       <div class="history-label">最近对话</div>

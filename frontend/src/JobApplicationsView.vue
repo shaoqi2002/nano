@@ -19,6 +19,7 @@ const errorMessage = ref("");
 const expandedId = ref(null);
 const query = ref("");
 const statusFilter = ref("all");
+const captureOpen = ref(true);
 const form = reactive({ jobUrl: "", notes: "" });
 const editDraft = reactive({});
 
@@ -89,6 +90,7 @@ async function submitApplication() {
     applications.value.unshift(application);
     form.jobUrl = "";
     form.notes = "";
+    captureOpen.value = false;
     openDetails(application);
   } catch (error) {
     errorMessage.value = error.message;
@@ -170,7 +172,7 @@ onMounted(loadApplications);
     <header class="jobs-topbar">
       <button class="jobs-icon-button" aria-label="返回对话" title="返回" @click="emit('back')">←</button>
       <div>
-        <strong>秋招投递</strong>
+        <strong>求职投递</strong>
         <span>把每一次尝试都放在看得见的地方</span>
       </div>
     </header>
@@ -184,17 +186,22 @@ onMounted(loadApplications);
           <article class="jobs-summary__offer"><span>Offer</span><strong>{{ summary.offers }}</strong></article>
         </section>
 
-        <form class="job-capture" @submit.prevent="submitApplication">
+        <form class="job-capture" :class="{ 'job-capture--collapsed': !captureOpen }" @submit.prevent="submitApplication">
           <div class="job-capture__heading">
             <div>
               <strong>记一笔新投递</strong>
-              <span>填入链接和你手边的信息，其余字段会先帮你整理出来。</span>
+              <span v-if="captureOpen">填入链接和你手边的信息，其余字段会先帮你整理出来。</span>
             </div>
-            <button type="submit" :disabled="isCreating || !form.jobUrl.trim()">
-              {{ isCreating ? "正在整理" : "加入投递表" }}
-            </button>
+            <button
+              type="button"
+              class="capture-toggle"
+              :aria-expanded="captureOpen"
+              :aria-label="captureOpen ? '收起新投递' : '展开新投递'"
+              :title="captureOpen ? '收起' : '展开'"
+              @click="captureOpen = !captureOpen"
+            >{{ captureOpen ? "↑" : "↓" }}</button>
           </div>
-          <label>
+          <label v-if="captureOpen">
             <span>投递地址</span>
             <input
               v-model="form.jobUrl"
@@ -203,7 +210,7 @@ onMounted(loadApplications);
               placeholder="https://career.example.com/jobs/123"
             >
           </label>
-          <label>
+          <label v-if="captureOpen">
             <span>补充描述</span>
             <textarea
               v-model="form.notes"
@@ -212,6 +219,11 @@ onMounted(loadApplications);
               placeholder="例如：公司：字节跳动，岗位：后端开发，地点：上海；内推，学长说一周内留意邮件"
             />
           </label>
+          <div v-if="captureOpen" class="job-capture__actions">
+            <button type="submit" :disabled="isCreating || !form.jobUrl.trim()">
+              {{ isCreating ? "正在整理" : "保存投递" }}
+            </button>
+          </div>
         </form>
 
         <div v-if="errorMessage" class="jobs-error" role="alert">{{ errorMessage }}</div>
@@ -344,72 +356,77 @@ onMounted(loadApplications);
 </template>
 
 <style scoped>
-.jobs-page { display: grid; min-width: 0; height: 100vh; flex: 1; grid-template-rows: auto 1fr; overflow: hidden; background: #f5f6f8; color: #202124; color-scheme: light; }
-.jobs-topbar { display: flex; min-height: 64px; align-items: center; gap: 12px; padding: 10px 22px; border-bottom: 1px solid #dedfe3; background: #fff; }
+.jobs-page { display: grid; min-width: 0; height: 100vh; flex: 1; grid-template-rows: auto 1fr; overflow: hidden; background: #212121; color: #ececec; color-scheme: dark; }
+.jobs-topbar { display: flex; min-height: 64px; align-items: center; gap: 12px; padding: 10px 22px; border-bottom: 1px solid #323232; background: #212121; }
 .jobs-topbar > div { display: grid; gap: 2px; }
 .jobs-topbar strong { font-size: 16px; }
-.jobs-topbar span { color: #74777d; font-size: 12px; }
-.jobs-icon-button { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #53565c; cursor: pointer; font-size: 18px; }
-.jobs-icon-button:hover { border-color: #d4d6da; background: #f0f1f3; }
+.jobs-topbar span { color: #929292; font-size: 12px; }
+.jobs-icon-button { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #b8b8b8; cursor: pointer; font-size: 18px; }
+.jobs-icon-button:hover { border-color: #484848; background: #303030; color: #f2f2f2; }
 .jobs-scroll { min-height: 0; overflow: auto; }
 .jobs-content { width: min(1320px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 48px; }
-.jobs-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #dedfe3; border-radius: 8px; background: #fff; }
-.jobs-summary article { display: grid; gap: 7px; padding: 18px 22px; border-right: 1px solid #e7e8eb; }
+.jobs-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #383838; border-radius: 8px; background: #282828; }
+.jobs-summary article { display: grid; gap: 7px; padding: 18px 22px; border-right: 1px solid #3a3a3a; }
 .jobs-summary article:last-child { border-right: 0; }
-.jobs-summary span { color: #777a80; font-size: 12px; }
+.jobs-summary span { color: #999; font-size: 12px; }
 .jobs-summary strong { font-size: 26px; font-variant-numeric: tabular-nums; }
-.jobs-summary__offer strong { color: #14765a; }
-.job-capture { display: grid; gap: 15px; margin-top: 18px; padding: 20px 22px; border: 1px solid #dedfe3; border-radius: 8px; background: #fff; }
+.jobs-summary__offer strong { color: #6bc5aa; }
+.job-capture { display: grid; gap: 15px; margin-top: 18px; padding: 20px 22px; border: 1px solid #3b3b3b; border-radius: 8px; background: #282828; }
+.job-capture--collapsed { gap: 0; padding-block: 15px; }
 .job-capture__heading, .jobs-table-tools, .job-edit-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .job-capture__heading > div, .jobs-table-tools > div:first-child, .job-detail__heading { display: grid; gap: 4px; }
-.job-capture__heading span, .job-detail__heading span { color: #777a80; font-size: 12px; }
-.job-capture label, .job-edit-form label { display: grid; gap: 6px; color: #5f6268; font-size: 12px; }
-input, textarea, select { min-width: 0; border: 1px solid #cfd1d6; border-radius: 6px; outline: 0; background: #fff; color: #202124; font: inherit; }
+.job-capture__heading span, .job-detail__heading span { color: #949494; font-size: 12px; }
+.job-capture label, .job-edit-form label { display: grid; gap: 6px; color: #b0b0b0; font-size: 12px; }
+.capture-toggle { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid #484848; border-radius: 6px; background: #303030; color: #d3d3d3; cursor: pointer; font-size: 16px; }
+.capture-toggle:hover { border-color: #666; background: #383838; color: #fff; }
+.job-capture__actions { display: flex; justify-content: flex-end; }
+input, textarea, select { min-width: 0; border: 1px solid #4a4a4a; border-radius: 6px; outline: 0; background: #1f1f1f; color: #ededed; font: inherit; }
+input::placeholder, textarea::placeholder { color: #6f6f6f; }
 input, select { height: 38px; padding: 0 11px; }
 textarea { width: 100%; resize: vertical; padding: 10px 11px; line-height: 1.5; }
-input:focus, textarea:focus, select:focus { border-color: #287a65; box-shadow: 0 0 0 3px rgb(40 122 101 / 10%); }
-button[type="submit"] { min-height: 36px; padding: 0 15px; border: 0; border-radius: 6px; background: #176b57; color: #fff; cursor: pointer; font-weight: 650; }
-button[type="submit"]:hover { background: #115745; }
+input:focus, textarea:focus, select:focus { border-color: #5aa991; box-shadow: 0 0 0 3px rgb(90 169 145 / 12%); }
+button[type="submit"] { min-height: 36px; padding: 0 15px; border: 0; border-radius: 6px; background: #e8e8e8; color: #1b1b1b; cursor: pointer; font-weight: 650; }
+button[type="submit"]:hover { background: #fff; }
 button:disabled { cursor: wait; opacity: .5; }
-.jobs-error { margin-top: 16px; padding: 11px 13px; border: 1px solid #e7b5b5; border-radius: 6px; background: #fff1f1; color: #a42c2c; font-size: 13px; }
-.jobs-table-section { margin-top: 18px; border: 1px solid #dedfe3; border-radius: 8px; overflow: hidden; background: #fff; }
-.jobs-table-tools { min-height: 64px; padding: 12px 18px; border-bottom: 1px solid #e4e5e8; }
+.jobs-error { margin-top: 16px; padding: 11px 13px; border: 1px solid #714242; border-radius: 6px; background: #382525; color: #f0aaaa; font-size: 13px; }
+.jobs-table-section { margin-top: 18px; border: 1px solid #383838; border-radius: 8px; overflow: hidden; background: #282828; }
+.jobs-table-tools { min-height: 64px; padding: 12px 18px; border-bottom: 1px solid #3b3b3b; }
 .jobs-table-tools > div:first-child { grid-template-columns: auto auto; align-items: baseline; column-gap: 8px; }
-.jobs-table-tools span { color: #85888e; font-size: 12px; }
+.jobs-table-tools span { color: #929292; font-size: 12px; }
 .jobs-filters { display: flex; gap: 8px; }
 .jobs-filters input { width: 240px; }
 .jobs-filters select { width: 130px; }
 .jobs-table-wrap { overflow-x: auto; }
 .jobs-table { width: 100%; min-width: 950px; border-collapse: collapse; table-layout: fixed; }
-.jobs-table th { padding: 11px 14px; border-bottom: 1px solid #e4e5e8; background: #f8f9fa; color: #777a80; font-size: 11px; font-weight: 650; text-align: left; }
+.jobs-table th { padding: 11px 14px; border-bottom: 1px solid #3b3b3b; background: #242424; color: #929292; font-size: 11px; font-weight: 650; text-align: left; }
 .jobs-table th:nth-child(1) { width: 25%; }.jobs-table th:nth-child(2) { width: 12%; }.jobs-table th:nth-child(3) { width: 17%; }.jobs-table th:nth-child(4) { width: 13%; }.jobs-table th:nth-child(5) { width: 17%; }.jobs-table th:nth-child(6) { width: 52px; }
-.jobs-table td { padding: 13px 14px; border-bottom: 1px solid #ececef; color: #55585e; font-size: 13px; vertical-align: middle; }
-.jobs-table tbody > tr:not(.job-detail-row):hover { background: #fafbfb; }
+.jobs-table td { padding: 13px 14px; border-bottom: 1px solid #383838; color: #b8b8b8; font-size: 13px; vertical-align: middle; }
+.jobs-table tbody > tr:not(.job-detail-row):hover { background: #303030; }
 .jobs-table td:first-child { display: table-cell; }
 .jobs-table td:first-child strong, .jobs-table td:first-child span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.jobs-table td:first-child strong { color: #202124; font-size: 14px; }
-.jobs-table td:first-child span { margin-top: 4px; color: #73767c; }
-.jobs-table a { display: block; overflow: hidden; color: #176b57; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.jobs-table td:first-child strong { color: #ededed; font-size: 14px; }
+.jobs-table td:first-child span { margin-top: 4px; color: #999; }
+.jobs-table a { display: block; overflow: hidden; color: #72bfa8; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .jobs-table a:hover { text-decoration: underline; }
-.jobs-row--expanded { background: #f7faf9; }
+.jobs-row--expanded { background: #2c3432; }
 .job-status { width: 116px; height: 32px; border: 0; padding: 0 28px 0 10px; font-size: 12px; font-weight: 650; }
-.job-status--preparing { background: #edf0f3; color: #626870; }.job-status--applied { background: #e8f1fb; color: #29659b; }.job-status--written_test { background: #fff2d7; color: #8a5a00; }.job-status--interviewing { background: #f1eafb; color: #6c3da0; }.job-status--offer { background: #e2f4ec; color: #14765a; }.job-status--rejected, .job-status--withdrawn { background: #f3e8e8; color: #995050; }
-.jobs-empty { display: grid; min-height: 210px; place-content: center; gap: 7px; color: #80838a; font-size: 13px; text-align: center; }
-.jobs-empty strong { color: #42454a; font-size: 15px; }
-.job-detail-row td { padding: 0; background: #f7faf9; }
-.job-detail { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 0; border-bottom: 1px solid #dfe8e5; }
+.job-status--preparing { background: #3c4145; color: #c2c7cc; }.job-status--applied { background: #283e50; color: #9bc9ee; }.job-status--written_test { background: #4b4027; color: #f2cc7a; }.job-status--interviewing { background: #40334f; color: #d2adee; }.job-status--offer { background: #28453c; color: #8bd6bd; }.job-status--rejected, .job-status--withdrawn { background: #493232; color: #e7aaaa; }
+.jobs-empty { display: grid; min-height: 210px; place-content: center; gap: 7px; color: #8f8f8f; font-size: 13px; text-align: center; }
+.jobs-empty strong { color: #d2d2d2; font-size: 15px; }
+.job-detail-row td { padding: 0; background: #252c2a; }
+.job-detail { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 0; border-bottom: 1px solid #3a4844; }
 .job-edit-form, .job-timeline { padding: 22px; }
-.job-edit-form { border-right: 1px solid #dfe5e3; }
+.job-edit-form { border-right: 1px solid #3a4542; }
 .job-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin-top: 16px; }
 .job-edit-grid__wide { grid-column: 1 / -1; }
 .job-edit-actions { margin-top: 16px; }
-.job-delete { min-height: 34px; padding: 0 10px; border: 0; background: transparent; color: #aa3838; cursor: pointer; }
+.job-delete { min-height: 34px; padding: 0 10px; border: 0; background: transparent; color: #e69393; cursor: pointer; }
 .job-timeline ol { display: grid; gap: 0; margin: 18px 0 0; padding: 0; list-style: none; }
 .job-timeline li { position: relative; display: grid; grid-template-columns: 15px 1fr; gap: 10px; min-height: 60px; }
-.job-timeline li:not(:last-child)::before { position: absolute; top: 12px; bottom: -2px; left: 5px; width: 1px; background: #cbd8d4; content: ""; }
-.job-timeline__dot { position: relative; z-index: 1; width: 11px; height: 11px; margin-top: 2px; border: 3px solid #f7faf9; border-radius: 50%; background: #2b806a; box-shadow: 0 0 0 1px #2b806a; }
+.job-timeline li:not(:last-child)::before { position: absolute; top: 12px; bottom: -2px; left: 5px; width: 1px; background: #4b5c57; content: ""; }
+.job-timeline__dot { position: relative; z-index: 1; width: 11px; height: 11px; margin-top: 2px; border: 3px solid #252c2a; border-radius: 50%; background: #63b49c; box-shadow: 0 0 0 1px #63b49c; }
 .job-timeline li div { display: grid; gap: 3px; }
-.job-timeline li strong { color: #303338; font-size: 13px; }.job-timeline li span { color: #85888e; font-size: 11px; }.job-timeline li small { color: #65686e; font-size: 11px; }
-@media (max-width: 900px) { .jobs-summary { grid-template-columns: repeat(2, 1fr); }.jobs-summary article:nth-child(2) { border-right: 0; }.jobs-summary article:nth-child(-n+2) { border-bottom: 1px solid #e7e8eb; }.job-detail { grid-template-columns: 1fr; }.job-edit-form { border-right: 0; border-bottom: 1px solid #dfe5e3; } }
-@media (max-width: 760px) { .jobs-content { width: calc(100% - 24px); padding-top: 16px; }.jobs-topbar { padding: 8px 12px; }.job-capture__heading, .jobs-table-tools { align-items: stretch; flex-direction: column; }.job-capture__heading button { align-self: stretch; }.jobs-filters input { width: 100%; }.jobs-filters select { width: 120px; }.job-edit-grid { grid-template-columns: 1fr; }.job-edit-grid__wide { grid-column: auto; } }
+.job-timeline li strong { color: #e1e1e1; font-size: 13px; }.job-timeline li span { color: #929292; font-size: 11px; }.job-timeline li small { color: #b0b0b0; font-size: 11px; }
+@media (max-width: 900px) { .jobs-summary { grid-template-columns: repeat(2, 1fr); }.jobs-summary article:nth-child(2) { border-right: 0; }.jobs-summary article:nth-child(-n+2) { border-bottom: 1px solid #3a3a3a; }.job-detail { grid-template-columns: 1fr; }.job-edit-form { border-right: 0; border-bottom: 1px solid #3a4542; } }
+@media (max-width: 760px) { .jobs-content { width: calc(100% - 24px); padding-top: 16px; }.jobs-topbar { padding: 8px 12px; }.jobs-table-tools { align-items: stretch; flex-direction: column; }.jobs-filters input { width: 100%; }.jobs-filters select { width: 120px; }.job-edit-grid { grid-template-columns: 1fr; }.job-edit-grid__wide { grid-column: auto; } }
 </style>
