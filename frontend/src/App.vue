@@ -16,6 +16,7 @@ import {
 } from "./api";
 import DocumentsView from "./DocumentsView.vue";
 import EvaluationsView from "./EvaluationsView.vue";
+import JobApplicationsView from "./JobApplicationsView.vue";
 import { renderMarkdown } from "./markdown";
 
 
@@ -367,6 +368,11 @@ function toggleRag() {
 function setAgentMode(mode) {
   agentMode.value = mode;
   localStorage.setItem(AGENT_MODE_STORAGE_KEY, mode);
+}
+
+function openJobApplications() {
+  activeView.value = "job-applications";
+  sidebarOpen.value = false;
 }
 
 function messageModeLabel(mode) {
@@ -792,6 +798,15 @@ onMounted(async () => {
         Agent Eval
       </button>
 
+      <button
+        class="new-chat-button documents-button"
+        :class="{ 'documents-button--active': activeView === 'job-applications' }"
+        @click="openJobApplications"
+      >
+        <span class="new-chat-button__icon">▦</span>
+        秋招投递
+      </button>
+
       <div class="history-label">最近对话</div>
       <nav class="conversation-list" aria-label="历史对话">
         <div
@@ -1025,11 +1040,16 @@ onMounted(async () => {
     />
 
     <EvaluationsView
-      v-else
+      v-else-if="activeView === 'evaluations'"
       :api-key="apiKey"
       :tavily-api-key="tavilyApiKey"
       @back="activeView = 'chat'"
       @configure-keys="openApiKeyDialog"
+    />
+
+    <JobApplicationsView
+      v-else
+      @back="activeView = 'chat'"
     />
 
     <div v-if="apiKeyDialogOpen" class="dialog-backdrop" @click.self="apiKeyDialogOpen = false">

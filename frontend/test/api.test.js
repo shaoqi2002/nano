@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   consumeEventStream,
+  createJobApplication,
   createEvalCase,
   deleteEvalCase,
   documentContentUrl,
@@ -16,6 +17,7 @@ import {
   restorePresetEvalCases,
   updateEvalCase,
   uploadDocument,
+  updateJobApplicationStatus,
 } from "../src/api.js";
 
 
@@ -25,6 +27,37 @@ test("builds inline and download document URLs", () => {
     documentContentUrl("doc-1", true),
     "/api/documents/doc-1/content?download=true",
   );
+});
+
+test("creates job applications and updates their status", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "job-1", status: "interviewing" }),
+    };
+  };
+
+  try {
+    await createJobApplication("https://careers.example.com/job/1", "后端开发");
+    await updateJobApplicationStatus("job-1", "interviewing");
+    assert.deepEqual(requests.map((item) => [
+      item.url,
+      item.options.method,
+      JSON.parse(item.options.body),
+    ]), [
+      ["/api/job-applications", "POST", {
+        job_url: "https://careers.example.com/job/1",
+        notes: "后端开发",
+      }],
+      ["/api/job-applications/job-1/status", "PATCH", { status: "interviewing" }],
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("queries DeepSeek balance through the backend", async () => {

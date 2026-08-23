@@ -3,6 +3,9 @@
 Nano 是一个可恢复、可观测、可评测的 LangGraph multi-agent 研究助手。它不仅调用 LLM，
 还把任务规划、角色分派、并行执行、工具权限、审核修订和运行追踪组成了一条完整的工程链路。
 
+如果希望从 Agent 基础概念开始理解请求链路、工作流、RAG、工具治理、恢复与评测实现，参阅
+[`docs/NANO_AGENT_PROJECT_GUIDE.md`](docs/NANO_AGENT_PROJECT_GUIDE.md)。
+
 ## Multi-agent 架构
 
 ```text

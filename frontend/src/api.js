@@ -278,3 +278,32 @@ export async function getDocumentText(documentId) {
   }
   return response.text();
 }
+
+export function listJobApplications() {
+  return request("/job-applications");
+}
+
+export function createJobApplication(jobUrl, notes) {
+  return request("/job-applications", {
+    method: "POST",
+    body: JSON.stringify({ job_url: jobUrl, notes }),
+  });
+}
+
+export function updateJobApplication(applicationId, fields) {
+  return request(`/job-applications/${applicationId}`, {
+    method: "PATCH",
+    body: JSON.stringify(fields),
+  });
+}
+
+export function updateJobApplicationStatus(applicationId, status) {
+  return request(`/job-applications/${applicationId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function deleteJobApplication(applicationId) {
+  return request(`/job-applications/${applicationId}`, { method: "DELETE" });
+}
