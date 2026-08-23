@@ -4,13 +4,18 @@ import { computed, onMounted, reactive, ref } from "vue";
 import {
   createJobApplication,
   deleteJobApplication,
+  enrichJobApplication,
   listJobApplications,
   updateJobApplication,
   updateJobApplicationStatus,
 } from "./api";
 
 
-const emit = defineEmits(["back"]);
+const emit = defineEmits(["back", "configure-keys"]);
+const props = defineProps({
+  apiKey: { type: String, default: "" },
+  tavilyApiKey: { type: String, default: "" },
+});
 const applications = ref([]);
 const isLoading = ref(true);
 const isCreating = ref(false);
@@ -86,7 +91,9 @@ async function submitApplication() {
   isCreating.value = true;
   errorMessage.value = "";
   try {
-    const application = await createJobApplication(form.jobUrl.trim(), form.notes.trim());
+    const application = await createJobApplication(
+      form.jobUrl.trim(), form.notes.trim(), props.apiKey, props.tavilyApiKey
+    );
     applications.value.unshift(application);
     form.jobUrl = "";
     form.notes = "";
@@ -149,6 +156,35 @@ async function saveDetails(application) {
   }
 }
 
+async function enrichApplication(application) {
+  if (!props.apiKey || !props.tavilyApiKey) {
+    errorMessage.value = "请先配置 DeepSeek 和 Tavily API Key";
+    emit("configure-keys");
+    return;
+  }
+  savingId.value = application.id;
+  errorMessage.value = "";
+  try {
+    const updated = await enrichJobApplication(
+      application.id, props.apiKey, props.tavilyApiKey
+    );
+    replaceApplication(updated);
+    Object.assign(editDraft, {
+      company: updated.company,
+      role: updated.role,
+      location: updated.location,
+      channel: updated.channel,
+      job_url: updated.job_url,
+      notes: updated.notes,
+      applied_at: updated.applied_at,
+    });
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    savingId.value = null;
+  }
+}
+
 async function removeApplication(application) {
   if (!window.confirm(`删除 ${application.company} 的 ${application.role} 投递记录？`)) return;
   savingId.value = application.id;
@@ -190,7 +226,8 @@ onMounted(loadApplications);
           <div class="job-capture__heading">
             <div>
               <strong>记一笔新投递</strong>
-              <span v-if="captureOpen">填入链接和你手边的信息，其余字段会先帮你整理出来。</span>
+              <span v-if="captureOpen && apiKey && tavilyApiKey">将读取招聘网页，并由 Agent 整理公司、岗位、地点和渠道。</span>
+              <span v-else-if="captureOpen">配置 DeepSeek 和 Tavily Key 后可自动读取网页；当前将使用本地规则整理。</span>
             </div>
             <button
               type="button"
@@ -221,7 +258,7 @@ onMounted(loadApplications);
           </label>
           <div v-if="captureOpen" class="job-capture__actions">
             <button type="submit" :disabled="isCreating || !form.jobUrl.trim()">
-              {{ isCreating ? "正在整理" : "保存投递" }}
+              {{ isCreating ? "正在读取并整理" : "保存投递" }}
             </button>
           </div>
         </form>
@@ -263,19 +300,26 @@ onMounted(loadApplications);
                   <th>投递渠道</th>
                   <th>投递日期</th>
                   <th>当前状态</th>
-                  <th><span class="visually-hidden">操作</span></th>
                 </tr>
               </thead>
               <tbody>
                 <template v-for="application in filteredApplications" :key="application.id">
-                  <tr :class="{ 'jobs-row--expanded': expandedId === application.id }">
+                  <tr
+                    class="jobs-data-row"
+                    :class="{ 'jobs-row--expanded': expandedId === application.id }"
+                    tabindex="0"
+                    :aria-expanded="expandedId === application.id"
+                    @click="openDetails(application)"
+                    @keydown.enter="openDetails(application)"
+                    @keydown.space.prevent="openDetails(application)"
+                  >
                     <td>
                       <strong>{{ application.company }}</strong>
                       <span>{{ application.role }}</span>
                     </td>
                     <td>{{ application.location || "待补充" }}</td>
                     <td>
-                      <a :href="application.job_url" target="_blank" rel="noopener noreferrer">
+                      <a :href="application.job_url" target="_blank" rel="noopener noreferrer" @click.stop>
                         {{ application.channel || hostname(application.job_url) }} ↗
                       </a>
                     </td>
@@ -287,6 +331,7 @@ onMounted(loadApplications);
                         :value="application.status"
                         :disabled="savingId === application.id"
                         :aria-label="`更新 ${application.company} 的投递状态`"
+                        @click.stop
                         @change="changeStatus(application, $event)"
                       >
                         <option v-for="item in statuses" :key="item.value" :value="item.value">
@@ -294,22 +339,22 @@ onMounted(loadApplications);
                         </option>
                       </select>
                     </td>
-                    <td>
-                      <button
-                        class="jobs-icon-button"
-                        :aria-label="expandedId === application.id ? '收起详情' : '查看详情'"
-                        :title="expandedId === application.id ? '收起' : '详情'"
-                        @click="openDetails(application)"
-                      >{{ expandedId === application.id ? "↑" : "↓" }}</button>
-                    </td>
                   </tr>
-                  <tr v-if="expandedId === application.id" class="job-detail-row">
-                    <td colspan="6">
+                  <tr v-if="expandedId === application.id" class="job-detail-row" @click.stop>
+                    <td colspan="5">
                       <div class="job-detail">
                         <form class="job-edit-form" @submit.prevent="saveDetails(application)">
-                          <div class="job-detail__heading">
-                            <strong>投递信息</strong>
-                            <span>自动整理不准的地方，可以直接修正。</span>
+                          <div class="job-detail__heading job-edit-heading">
+                            <div>
+                              <strong>投递信息</strong>
+                              <span>点击条目展开；自动整理不准的地方可以直接修正。</span>
+                            </div>
+                            <button
+                              type="button"
+                              class="job-enrich"
+                              :disabled="savingId === application.id"
+                              @click="enrichApplication(application)"
+                            >{{ savingId === application.id ? "正在读取" : "重新读取网页" }}</button>
                           </div>
                           <div class="job-edit-grid">
                             <label><span>公司</span><input v-model="editDraft.company" required></label>
@@ -375,6 +420,8 @@ onMounted(loadApplications);
 .job-capture--collapsed { gap: 0; padding-block: 15px; }
 .job-capture__heading, .jobs-table-tools, .job-edit-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .job-capture__heading > div, .jobs-table-tools > div:first-child, .job-detail__heading { display: grid; gap: 4px; }
+.job-edit-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.job-edit-heading > div { display: grid; gap: 4px; }
 .job-capture__heading span, .job-detail__heading span { color: #949494; font-size: 12px; }
 .job-capture label, .job-edit-form label { display: grid; gap: 6px; color: #b0b0b0; font-size: 12px; }
 .capture-toggle { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid #484848; border-radius: 6px; background: #303030; color: #d3d3d3; cursor: pointer; font-size: 16px; }
@@ -399,9 +446,11 @@ button:disabled { cursor: wait; opacity: .5; }
 .jobs-table-wrap { overflow-x: auto; }
 .jobs-table { width: 100%; min-width: 950px; border-collapse: collapse; table-layout: fixed; }
 .jobs-table th { padding: 11px 14px; border-bottom: 1px solid #3b3b3b; background: #242424; color: #929292; font-size: 11px; font-weight: 650; text-align: left; }
-.jobs-table th:nth-child(1) { width: 25%; }.jobs-table th:nth-child(2) { width: 12%; }.jobs-table th:nth-child(3) { width: 17%; }.jobs-table th:nth-child(4) { width: 13%; }.jobs-table th:nth-child(5) { width: 17%; }.jobs-table th:nth-child(6) { width: 52px; }
+.jobs-table th:nth-child(1) { width: 30%; }.jobs-table th:nth-child(2) { width: 14%; }.jobs-table th:nth-child(3) { width: 20%; }.jobs-table th:nth-child(4) { width: 15%; }.jobs-table th:nth-child(5) { width: 21%; }
 .jobs-table td { padding: 13px 14px; border-bottom: 1px solid #383838; color: #b8b8b8; font-size: 13px; vertical-align: middle; }
 .jobs-table tbody > tr:not(.job-detail-row):hover { background: #303030; }
+.jobs-data-row { cursor: pointer; outline: 0; }
+.jobs-data-row:focus-visible { box-shadow: inset 0 0 0 2px #63b49c; }
 .jobs-table td:first-child { display: table-cell; }
 .jobs-table td:first-child strong, .jobs-table td:first-child span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jobs-table td:first-child strong { color: #ededed; font-size: 14px; }
@@ -421,6 +470,8 @@ button:disabled { cursor: wait; opacity: .5; }
 .job-edit-grid__wide { grid-column: 1 / -1; }
 .job-edit-actions { margin-top: 16px; }
 .job-delete { min-height: 34px; padding: 0 10px; border: 0; background: transparent; color: #e69393; cursor: pointer; }
+.job-enrich { min-height: 34px; flex: 0 0 auto; padding: 0 11px; border: 1px solid #50645e; border-radius: 6px; background: #2d3b37; color: #9dd4c3; cursor: pointer; font-size: 12px; }
+.job-enrich:hover { border-color: #6b8c82; background: #354843; }
 .job-timeline ol { display: grid; gap: 0; margin: 18px 0 0; padding: 0; list-style: none; }
 .job-timeline li { position: relative; display: grid; grid-template-columns: 15px 1fr; gap: 10px; min-height: 60px; }
 .job-timeline li:not(:last-child)::before { position: absolute; top: 12px; bottom: -2px; left: 5px; width: 1px; background: #4b5c57; content: ""; }

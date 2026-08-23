@@ -283,10 +283,24 @@ export function listJobApplications() {
   return request("/job-applications");
 }
 
-export function createJobApplication(jobUrl, notes) {
+export function createJobApplication(jobUrl, notes, apiKey = "", tavilyApiKey = "") {
+  const headers = {};
+  if (apiKey) headers["X-DeepSeek-API-Key"] = apiKey;
+  if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
   return request("/job-applications", {
     method: "POST",
+    headers,
     body: JSON.stringify({ job_url: jobUrl, notes }),
+  });
+}
+
+export function enrichJobApplication(applicationId, apiKey, tavilyApiKey) {
+  return request(`/job-applications/${applicationId}/enrich`, {
+    method: "POST",
+    headers: {
+      "X-DeepSeek-API-Key": apiKey,
+      "X-Tavily-API-Key": tavilyApiKey,
+    },
   });
 }
 

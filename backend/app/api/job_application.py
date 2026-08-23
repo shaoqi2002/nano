@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
@@ -13,7 +13,7 @@ from app.schema.job_application import (
     JobApplicationUpdate,
     JobStatusUpdate,
 )
-from app.service.job_application import infer_job_information
+from app.service.job_application import infer_job_information_with_agent
 
 
 router = APIRouter(prefix="/job-applications", tags=["job-applications"])
@@ -43,9 +43,18 @@ async def read_job_applications(
     "", response_model=JobApplicationResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_job_application(
-    body: JobApplicationCreate, session: SessionDependency
+    body: JobApplicationCreate,
+    session: SessionDependency,
+    deepseek_api_key: Annotated[
+        str | None, Header(alias="X-DeepSeek-API-Key", min_length=1)
+    ] = None,
+    tavily_api_key: Annotated[
+        str | None, Header(alias="X-Tavily-API-Key", min_length=1)
+    ] = None,
 ) -> JobApplicationResponse:
-    inferred = infer_job_information(body.job_url, body.notes)
+    inferred = await infer_job_information_with_agent(
+        body.job_url, body.notes, deepseek_api_key, tavily_api_key
+    )
     application = JobApplication(job_url=body.job_url, notes=body.notes, **inferred)
     event = JobApplicationEvent(to_status="applied", note="新增投递记录")
     application.events.append(event)
@@ -53,6 +62,32 @@ async def create_job_application(
         session.add(application)
     application = await require_application(session, application.id)
     return JobApplicationResponse.model_validate(application)
+
+
+@router.post("/{application_id}/enrich", response_model=JobApplicationResponse)
+async def enrich_job_application(
+    application_id: UUID,
+    session: SessionDependency,
+    deepseek_api_key: Annotated[
+        str, Header(alias="X-DeepSeek-API-Key", min_length=1)
+    ],
+    tavily_api_key: Annotated[
+        str, Header(alias="X-Tavily-API-Key", min_length=1)
+    ],
+) -> JobApplicationResponse:
+    application = await require_application(session, application_id)
+    inferred = await infer_job_information_with_agent(
+        application.job_url,
+        application.notes,
+        deepseek_api_key,
+        tavily_api_key,
+    )
+    for field, value in inferred.items():
+        setattr(application, field, value)
+    await session.commit()
+    return JobApplicationResponse.model_validate(
+        await require_application(session, application_id)
+    )
 
 
 @router.patch("/{application_id}", response_model=JobApplicationResponse)

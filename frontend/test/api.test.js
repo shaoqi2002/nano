@@ -42,8 +42,12 @@ test("creates job applications and updates their status", async () => {
   };
 
   try {
-    await createJobApplication("https://careers.example.com/job/1", "后端开发");
+    await createJobApplication(
+      "https://careers.example.com/job/1", "后端开发", "sk-test", "tvly-test"
+    );
     await updateJobApplicationStatus("job-1", "interviewing");
+    assert.equal(requests[0].options.headers["X-DeepSeek-API-Key"], "sk-test");
+    assert.equal(requests[0].options.headers["X-Tavily-API-Key"], "tvly-test");
     assert.deepEqual(requests.map((item) => [
       item.url,
       item.options.method,

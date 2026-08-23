@@ -1049,7 +1049,10 @@ onMounted(async () => {
 
     <JobApplicationsView
       v-else
+      :api-key="apiKey"
+      :tavily-api-key="tavilyApiKey"
       @back="activeView = 'chat'"
+      @configure-keys="openApiKeyDialog"
     />
 
     <div v-if="apiKeyDialogOpen" class="dialog-backdrop" @click.self="apiKeyDialogOpen = false">
