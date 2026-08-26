@@ -459,20 +459,42 @@ button {
   background: #191919;
 }
 
-.message-attachment--text {
-  display: flex;
-  width: auto;
-  max-width: 100%;
+.message-attachment--text,
+.message-attachment--document {
+  display: grid;
+  width: min(300px, 100%);
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
-  padding: 9px 12px;
+  gap: 10px;
+  padding: 9px 11px;
 }
 
 .message-attachment__icon,
 .pending-attachment__icon {
+  display: grid;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1px solid #40544f;
+  border-radius: 9px;
+  background: #26332f;
   color: #a9d8cd;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
+  letter-spacing: 0.015em;
+  line-height: 1;
+  text-align: center;
+}
+
+.message-attachment__icon {
+  width: 40px;
+  height: 40px;
+}
+
+.pending-attachment__icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 7px;
 }
 
 .message-attachment figcaption {
@@ -484,9 +506,12 @@ button {
   white-space: nowrap;
 }
 
-.message-attachment--text figcaption {
-  max-width: 230px;
+.message-attachment--text figcaption,
+.message-attachment--document figcaption {
+  min-width: 0;
   padding: 0;
+  color: #d0d0d0;
+  font-size: 12px;
 }
 
 .markdown-body {
