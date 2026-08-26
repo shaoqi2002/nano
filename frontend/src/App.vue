@@ -47,9 +47,8 @@ const KNOWN_WORKSPACES_STORAGE_KEY = "nano-known-workspaces";
 
 const workspaces = ref([]);
 const activeWorkspace = ref(null);
-const workspaceSelection = ref("");
+const workspaceEntry = ref("");
 const newWorkspaceName = ref("");
-const existingWorkspaceName = ref("");
 const workspaceLoading = ref(true);
 const workspaceSubmitting = ref(false);
 const workspaceDeleting = ref(false);
@@ -895,8 +894,8 @@ async function enterWorkspace(workspace) {
   await loadWorkspaceData();
 }
 
-async function enterExistingWorkspace() {
-  const name = existingWorkspaceName.value.trim();
+async function enterSelectedOrExistingWorkspace() {
+  const name = workspaceEntry.value.trim();
   if (!name) {
     workspaceError.value = "请输入 workspace 名称";
     return;
@@ -904,29 +903,17 @@ async function enterExistingWorkspace() {
   workspaceSubmitting.value = true;
   workspaceError.value = "";
   try {
-    const workspace = await resolveWorkspace(name);
+    const knownWorkspace = workspaces.value.find(
+      (item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+    );
+    const workspace = knownWorkspace || await resolveWorkspace(name);
     if (!workspaces.value.some((item) => item.id === workspace.id)) {
       workspaces.value.push(workspace);
     }
-    workspaceSelection.value = workspace.id;
-    existingWorkspaceName.value = "";
+    workspaceEntry.value = workspace.name;
     await enterWorkspace(workspace);
   } catch (error) {
     workspaceError.value = error.message;
-  } finally {
-    workspaceSubmitting.value = false;
-  }
-}
-
-async function enterSelectedWorkspace() {
-  const selected = workspaces.value.find((item) => item.id === workspaceSelection.value);
-  if (!selected) {
-    workspaceError.value = "请选择一个 workspace";
-    return;
-  }
-  workspaceSubmitting.value = true;
-  try {
-    await enterWorkspace(selected);
   } finally {
     workspaceSubmitting.value = false;
   }
@@ -943,7 +930,7 @@ async function createAndEnterWorkspace() {
   try {
     const workspace = await createWorkspace(name);
     workspaces.value.push(workspace);
-    workspaceSelection.value = workspace.id;
+    workspaceEntry.value = workspace.name;
     newWorkspaceName.value = "";
     await enterWorkspace(workspace);
   } catch (error) {
@@ -979,7 +966,7 @@ async function removeActiveWorkspace() {
     localStorage.removeItem(workspaceStorageKey(ACTIVE_RUN_STORAGE_KEY));
     forgetWorkspace(workspace.id);
     workspaces.value = workspaces.value.filter((item) => item.id !== workspace.id);
-    workspaceSelection.value = workspaces.value[0]?.id || "";
+    workspaceEntry.value = workspaces.value[0]?.name || "";
     leaveWorkspace();
   } catch (error) {
     errorMessage.value = error.message;
@@ -998,7 +985,7 @@ onMounted(async () => {
       JSON.stringify(workspaces.value.map((workspace) => workspace.id)),
     );
     if (workspaces.value.length) {
-      workspaceSelection.value = workspaces.value[0].id;
+      workspaceEntry.value = workspaces.value[0].name;
     }
   } catch (error) {
     workspaceError.value = error.message;
@@ -1022,32 +1009,22 @@ onMounted(async () => {
         <span class="loader" /> 正在载入 workspace
       </div>
       <template v-else>
-        <form v-if="workspaces.length" class="workspace-gate__form" @submit.prevent="enterSelectedWorkspace">
+        <form class="workspace-gate__form" @submit.prevent="enterSelectedOrExistingWorkspace">
           <label>
-            <span>选择 workspace</span>
-            <select v-model="workspaceSelection" :disabled="workspaceSubmitting">
-              <option value="" disabled>请选择</option>
-              <option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.id">
-                {{ workspace.name }}
-              </option>
-            </select>
-          </label>
-          <button type="submit" :disabled="workspaceSubmitting || !workspaceSelection">进入 Nano</button>
-        </form>
-
-        <div v-if="workspaces.length" class="workspace-gate__divider"><span>或</span></div>
-
-        <form class="workspace-gate__form" @submit.prevent="enterExistingWorkspace">
-          <label>
-            <span>进入已有 workspace</span>
+            <span>选择或输入 workspace</span>
             <input
-              v-model="existingWorkspaceName"
+              v-model="workspaceEntry"
+              list="known-workspaces"
               maxlength="80"
               placeholder="输入准确的 workspace 名称"
+              autocomplete="off"
               :disabled="workspaceSubmitting"
             />
+            <datalist id="known-workspaces">
+              <option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.name" />
+            </datalist>
           </label>
-          <button type="submit" :disabled="workspaceSubmitting || !existingWorkspaceName.trim()">进入已有 workspace</button>
+          <button type="submit" :disabled="workspaceSubmitting || !workspaceEntry.trim()">进入 Nano</button>
         </form>
 
         <div class="workspace-gate__divider"><span>或创建新的 workspace</span></div>
