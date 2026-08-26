@@ -2,7 +2,7 @@ export const CHAT_ATTACHMENT_ACCEPT = [
   "image/png", "image/jpeg", "image/webp", "image/gif",
   ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".log",
   ".html", ".css", ".js", ".ts", ".py", ".java", ".c", ".cpp", ".h", ".sql", ".sh",
-  ".pdf", ".docx", ".pptx",
+  ".pdf", ".docx",
 ].join(",");
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -43,13 +43,11 @@ export async function fileToChatAttachment(file) {
     };
   }
   const fileExtension = extension(file.name);
-  if (["pdf", "docx", "pptx"].includes(fileExtension)) {
+  if (fileExtension === "pdf" || fileExtension === "docx") {
     if (file.size > MAX_DOCUMENT_BYTES) throw new Error(`${file.name} 超过 10 MB`);
-    const mediaType = {
-      pdf: "application/pdf",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    }[fileExtension];
+    const mediaType = fileExtension === "pdf"
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     const dataUrl = await readDataUrl(file);
     return {
       kind: "document",
@@ -88,9 +86,7 @@ export function attachmentPreviewUrl(attachment) {
 export function attachmentTypeLabel(attachment) {
   if (attachment.kind === "image") return "IMG";
   if (attachment.kind === "document") {
-    if (attachment.media_type === "application/pdf") return "PDF";
-    if (attachment.media_type.includes("presentationml")) return "PPTX";
-    return "DOCX";
+    return attachment.media_type === "application/pdf" ? "PDF" : "DOCX";
   }
   return "TXT";
 }

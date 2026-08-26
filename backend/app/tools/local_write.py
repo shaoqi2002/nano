@@ -12,8 +12,7 @@ from app.service.document import (
     cached_document_path,
     require_document,
 )
-from app.service.chat_artifact import get_chat_artifact, store_chat_artifact
-from app.service.presentation_artifact import create_presentation, edit_presentation
+from app.service.chat_artifact import store_chat_artifact
 from app.service.word_artifact import (
     convert_word_to_pdf,
     create_word_document,
@@ -127,50 +126,6 @@ async def word_convert_to_pdf(document_id: str, output_filename: str) -> dict:
     }
 
 
-@tool
-async def presentation_create(
-    filename: str,
-    title: str,
-    slides: list[dict[str, Any]],
-    subtitle: str = "",
-    theme: str = "auto",
-    design: dict[str, Any] | None = None,
-) -> dict:
-    """生成美观的 16:9 PPTX。theme 默认 auto，会根据整份内容动态生成协调色板，不受有限模板约束。可用 design 传入开放式视觉描述，例如 mood、mode(light/dark)及可选 primary_color、accent_color、background_color、text_color；用户明确指定旧预设 business、modern、tech 时仍兼容。系统也会自动识别核心结论、关键数字和流程步骤并匹配版式。"""
-    name = safe_artifact_filename(filename, ".pptx")
-    with tempfile.TemporaryDirectory(prefix="nano-ppt-") as directory:
-        path = Path(directory) / name
-        selected_theme = await run_in_threadpool(
-            create_presentation, path, title, subtitle, slides, theme, design
-        )
-        output = await run_in_threadpool(store_chat_artifact, path, name)
-        output["kind"] = "presentation"
-        return {"outputs": [output], "selected_theme": selected_theme}
-
-
-@tool
-async def presentation_edit_attachment(
-    artifact_id: str,
-    output_filename: str,
-    operations: list[dict[str, Any]],
-) -> dict:
-    """编辑聊天中上传的 PPTX 并返回新版本。artifact_id 来自附件上下文；operations 支持 replace_text(old,new)、delete_slide(slide_number) 和 append_slides(slides)，不会覆盖原文件。"""
-    source, _ = await run_in_threadpool(get_chat_artifact, UUID(artifact_id))
-    if source.suffix.lower() != ".pptx":
-        raise ValueError("只能编辑聊天中上传的 PPTX 文件。")
-    name = safe_artifact_filename(output_filename, ".pptx")
-    with tempfile.TemporaryDirectory(prefix="nano-ppt-edit-") as directory:
-        output_path = Path(directory) / name
-        summary = await run_in_threadpool(edit_presentation, source, output_path, operations)
-        output = await run_in_threadpool(store_chat_artifact, output_path, name)
-        output["kind"] = "presentation"
-        return {
-            "outputs": [output],
-            "edit_summary": summary,
-            "source_artifact_id": artifact_id,
-        }
-
-
 def create_local_write_tools():
     return [
         local_write_text,
@@ -178,6 +133,4 @@ def create_local_write_tools():
         word_create_document,
         word_edit_document,
         word_convert_to_pdf,
-        presentation_create,
-        presentation_edit_attachment,
     ]

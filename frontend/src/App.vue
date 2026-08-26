@@ -134,6 +134,14 @@ function forgetWorkspace(workspaceId) {
   localStorage.setItem(KNOWN_WORKSPACES_STORAGE_KEY, JSON.stringify(ids));
 }
 
+function removeRememberedWorkspace(workspace) {
+  forgetWorkspace(workspace.id);
+  workspaces.value = workspaces.value.filter((item) => item.id !== workspace.id);
+  if (workspaceEntry.value.toLocaleLowerCase() === workspace.name.toLocaleLowerCase()) {
+    workspaceEntry.value = workspaces.value[0]?.name || "";
+  }
+}
+
 async function addChatFiles(fileList) {
   const files = [...(fileList || [])];
   if (!files.length) return;
@@ -515,8 +523,6 @@ function toolLabel(name) {
     word_create_document: "生成 Word",
     word_edit_document: "编辑 Word",
     word_convert_to_pdf: "转换 PDF",
-    presentation_create: "生成 PPT",
-    presentation_edit_attachment: "编辑 PPT",
   }[name] || name;
 }
 
@@ -1026,6 +1032,29 @@ onMounted(async () => {
               <option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.name" />
             </datalist>
           </label>
+          <div v-if="workspaces.length" class="workspace-memory">
+            <span>此浏览器使用过</span>
+            <div class="workspace-memory__list">
+              <div v-for="workspace in workspaces" :key="workspace.id" class="workspace-memory__item">
+                <button
+                  type="button"
+                  class="workspace-memory__select"
+                  @click="workspaceEntry = workspace.name"
+                >{{ workspace.name }}</button>
+                <button
+                  type="button"
+                  class="workspace-memory__remove"
+                  :aria-label="`从此浏览器移除 ${workspace.name} 的记录`"
+                  title="仅移除此浏览器的记录"
+                  @click="removeRememberedWorkspace(workspace)"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4 4l8 8M12 4l-8 8" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
           <button type="submit" :disabled="workspaceSubmitting || !workspaceEntry.trim()">进入 Nano</button>
         </form>
 
@@ -1541,7 +1570,7 @@ onMounted(async () => {
                   :download="artifact.filename"
                 >
                   <span class="message-artifact-download__icon">
-                    {{ artifact.kind === "pdf" ? "PDF" : artifact.kind === "presentation" ? "PPTX" : "DOCX" }}
+                    {{ artifact.kind === "pdf" ? "PDF" : "DOCX" }}
                   </span>
                   <span class="message-artifact-download__body">
                     <strong>{{ artifact.filename }}</strong>

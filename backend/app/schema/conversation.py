@@ -47,7 +47,6 @@ class ChatAttachment(BaseModel):
             allowed = {
                 "application/pdf": ".pdf",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
             }
             if self.media_type not in allowed:
                 raise ValueError("Unsupported document type")
@@ -59,8 +58,8 @@ class ChatAttachment(BaseModel):
                 raise ValueError("Documents must not be empty")
             if self.media_type == "application/pdf" and not decoded.startswith(b"%PDF-"):
                 raise ValueError("Document content does not match PDF")
-            if self.media_type != "application/pdf" and not decoded.startswith(b"PK"):
-                raise ValueError("Document content does not match its Office format")
+            if self.media_type.endswith("document") and not decoded.startswith(b"PK"):
+                raise ValueError("Document content does not match DOCX")
             if not self.name.lower().endswith(allowed[self.media_type]):
                 raise ValueError("Document filename extension does not match its type")
             if len(decoded) > 10 * 1024 * 1024:
@@ -111,7 +110,7 @@ class ChatArtifactResponse(BaseModel):
     size_bytes: int
     download_url: str
     expires_in_seconds: int
-    kind: Literal["word", "pdf", "presentation"]
+    kind: Literal["word", "pdf"]
     page_count: int | None = None
 
 

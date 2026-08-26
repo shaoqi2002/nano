@@ -67,31 +67,6 @@ def store_chat_artifact(
     }
 
 
-def store_chat_artifact_bytes(
-    content: bytes, filename: str, workspace_id: UUID | None = None
-) -> dict:
-    """Store an uploaded chat-local source without routing it through the document library."""
-    cleanup_expired_chat_artifacts()
-    selected_workspace_id = workspace_id or active_workspace_id()
-    artifact_id = uuid4()
-    directory = CHAT_ARTIFACT_DIR / str(selected_workspace_id) / str(artifact_id)
-    target = directory / Path(filename).name
-    with _lock:
-        directory.mkdir(parents=True, exist_ok=False)
-        target.write_bytes(content)
-    media_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-    return {
-        "artifact_id": str(artifact_id),
-        "filename": target.name,
-        "media_type": media_type,
-        "size_bytes": target.stat().st_size,
-        "download_url": (
-            f"/api/artifacts/{artifact_id}?workspace_id={selected_workspace_id}"
-        ),
-        "expires_in_seconds": max(CHAT_ARTIFACT_TTL_SECONDS, 60),
-    }
-
-
 def get_chat_artifact(
     artifact_id: UUID, workspace_id: UUID | None = None
 ) -> tuple[Path, str]:

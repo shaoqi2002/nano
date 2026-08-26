@@ -11,7 +11,6 @@ class ToolsTests(unittest.TestCase):
                 "local_system_status", "local_list_files", "local_read_text", "local_search_files",
                 "local_write_text", "local_move_file", "word_create_document",
                 "word_edit_document", "word_convert_to_pdf",
-                "presentation_create", "presentation_edit_attachment",
             ],
         )
 
@@ -23,7 +22,6 @@ class ToolsTests(unittest.TestCase):
                 "local_system_status", "local_list_files", "local_read_text", "local_search_files",
                 "local_write_text", "local_move_file", "word_create_document",
                 "word_edit_document", "word_convert_to_pdf",
-                "presentation_create", "presentation_edit_attachment",
                 "web_search", "web_extract", "deep_research",
             ],
         )
