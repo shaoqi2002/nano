@@ -296,11 +296,13 @@ async def stream_resume_run(
     tavily_api_key: str | None,
     checkpointer: Any,
 ) -> AsyncIterator[dict[str, Any]]:
-    run = await get_run(session, run_id)
-    if run.status == "completed" and run.assistant_message_id:
-        assistant = await session.get(Message, run.assistant_message_id)
-        if assistant is not None:
-            yield {
+    completed_payload: dict[str, Any] | None = None
+    async with session.begin():
+        run = await get_run(session, run_id)
+        if run.status == "completed" and run.assistant_message_id:
+            assistant = await session.get(Message, run.assistant_message_id)
+            if assistant is not None:
+                completed_payload = {
                 "type": "message.completed",
                 "message": {
                     "id": assistant.id,
@@ -311,6 +313,8 @@ async def stream_resume_run(
                     "run_id": str(run.id),
                 },
             }
+    if completed_payload is not None:
+        yield completed_payload
         return
     if run.status == "cancelled":
         raise ValueError("任务已取消，不能恢复")
@@ -337,9 +341,10 @@ async def _stream_graph(
     checkpointer: Any,
     sources: list[dict],
 ) -> AsyncIterator[dict[str, Any]]:
-    conversation_messages = await list_recent_messages(
-        session, run.conversation_id, CHAT_CONTEXT_MESSAGE_LIMIT
-    )
+    async with session.begin():
+        conversation_messages = await list_recent_messages(
+            session, run.conversation_id, CHAT_CONTEXT_MESSAGE_LIMIT
+        )
     model_name = model_for_messages(conversation_messages)
     graph = build_agent_graph(
         create_model(api_key, model_name),

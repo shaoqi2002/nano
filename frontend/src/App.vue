@@ -1063,7 +1063,17 @@ onMounted(async () => {
               />
               <span v-else class="pending-attachment__icon">{{ attachmentTypeLabel(attachment) }}</span>
               <span class="pending-attachment__name" :title="attachment.name">{{ attachment.name }}</span>
-              <button type="button" aria-label="移除附件" @click="removeChatAttachment(index)">×</button>
+              <button
+                type="button"
+                class="pending-attachment__remove"
+                aria-label="移除附件"
+                title="移除附件"
+                @click="removeChatAttachment(index)"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M4 4l8 8M12 4l-8 8" />
+                </svg>
+              </button>
             </div>
           </div>
           <div class="composer-input-row">
@@ -1082,7 +1092,11 @@ onMounted(async () => {
             aria-label="添加文本或图片附件"
             title="添加文本或图片"
             @click="chatFileInput?.click()"
-          >＋</button>
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+          </button>
           <textarea
             ref="composer"
             v-model="draft"

@@ -1050,17 +1050,27 @@ button {
 }
 
 .attach-button {
+  display: grid;
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
   margin-bottom: 3px;
+  padding: 0;
+  place-items: center;
   border: 1px solid #4a4a4a;
   border-radius: 50%;
   background: transparent;
   color: #bcbcbc;
   cursor: pointer;
-  font-size: 19px;
-  line-height: 1;
+}
+
+.attach-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-width: 1.6;
 }
 
 .attach-button:hover:not(:disabled) {
@@ -1106,12 +1116,39 @@ button {
   white-space: nowrap;
 }
 
-.pending-attachment button {
-  padding: 0 3px;
+.pending-attachment__remove {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
   background: transparent;
   color: #888;
   cursor: pointer;
-  font-size: 16px;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.pending-attachment__remove:hover {
+  border-color: #555;
+  background: #343434;
+  color: #ddd;
+}
+
+.pending-attachment__remove:focus-visible {
+  outline: 2px solid #82c9b9;
+  outline-offset: 1px;
+}
+
+.pending-attachment__remove svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-width: 1.7;
 }
 
 .visually-hidden {
