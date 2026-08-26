@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import time
@@ -17,12 +18,14 @@ from langchain_core.tools import BaseTool, ToolException
 from langchain_deepseek import ChatDeepSeek
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import (
     AGENT_MAX_TOOL_CALLS,
     AGENT_MAX_TOOL_ROUNDS,
     CHAT_CONTEXT_MESSAGE_LIMIT,
     DEEPSEEK_MODEL,
+    DEEPSEEK_VISION_MODEL,
 )
 from app.eval.citations import extract_urls
 from app.model.conversation import Conversation, Message
@@ -38,6 +41,7 @@ from app.repository.conversation import (
 )
 from app.tools import create_tools
 from app.service.embedding import EmbeddingConfigurationError, EmbeddingServiceError
+from app.service.document import InvalidDocumentError, pdf_text, word_text
 from app.service.rag import build_rag_context, public_sources, retrieve_sources
 
 
@@ -48,13 +52,23 @@ class ConversationNotFoundError(Exception):
     pass
 
 
-def create_model(api_key: str) -> ChatDeepSeek:
+def create_model(api_key: str, model_name: str | None = None) -> ChatDeepSeek:
     return ChatDeepSeek(
-        model=DEEPSEEK_MODEL,
+        model=model_name or DEEPSEEK_MODEL,
         api_key=SecretStr(api_key),
         temperature=0.7,
         max_retries=2,
     )
+
+
+def model_for_messages(messages: list[Message]) -> str:
+    if any(
+        attachment.get("kind") == "image"
+        for message in messages
+        for attachment in (getattr(message, "attachments", None) or [])
+    ):
+        return DEEPSEEK_VISION_MODEL
+    return DEEPSEEK_MODEL
 
 
 def _tool_result_text(result: Any) -> str:
@@ -259,6 +273,53 @@ def _response_text(message: AIMessage) -> str:
     return "\n".join(text_parts).strip()
 
 
+def human_message_content(content: str, attachments: list[dict] | None = None):
+    """Build OpenAI-compatible multimodal content without involving RAG."""
+    attachments = attachments or []
+    if not attachments:
+        return content
+    blocks: list[dict[str, Any]] = []
+    prompt = content.strip() or "请阅读并分析我附上的文件。"
+    blocks.append({"type": "text", "text": prompt})
+    for attachment in attachments:
+        name = str(attachment.get("name") or "未命名文件")
+        if attachment.get("kind") in {"text", "document"}:
+            blocks.append({
+                "type": "text",
+                "text": (
+                    f"\n<chat_attachment name={json.dumps(name, ensure_ascii=False)}>\n"
+                    f"{attachment.get('content') or ''}\n</chat_attachment>"
+                ),
+            })
+        elif attachment.get("kind") == "image":
+            media_type = str(attachment.get("media_type") or "image/png")
+            blocks.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{media_type};base64,{attachment.get('data') or ''}"},
+            })
+    return blocks
+
+
+async def prepare_chat_attachments(attachments: list[dict]) -> list[dict]:
+    """Extract chat-local document text without creating RAG documents."""
+    prepared: list[dict] = []
+    for attachment in attachments:
+        item = dict(attachment)
+        if item.get("kind") == "document":
+            raw = base64.b64decode(str(item.get("data") or ""), validate=True)
+            parser = pdf_text if item.get("media_type") == "application/pdf" else word_text
+            extracted = (await run_in_threadpool(parser, raw)).strip()
+            if not extracted:
+                raise InvalidDocumentError(
+                    f"{item.get('name') or '文档'} 没有可提取的文本；扫描版 PDF 需要 OCR"
+                )
+            if len(extracted) > 490_000:
+                extracted = extracted[:490_000] + "\n\n[文档内容过长，已截断]"
+            item["content"] = extracted
+        prepared.append(item)
+    return prepared
+
+
 def convert_messages(messages: list[Message]) -> list[BaseMessage]:
     converted: list[BaseMessage] = [
         SystemMessage(
@@ -280,7 +341,9 @@ def convert_messages(messages: list[Message]) -> list[BaseMessage]:
 
     for message in messages:
         if message.role == "user":
-            converted.append(HumanMessage(content=message.content))
+            converted.append(HumanMessage(content=human_message_content(
+                message.content, getattr(message, "attachments", [])
+            )))
         else:
             converted.append(AIMessage(content=message.content))
 

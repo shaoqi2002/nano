@@ -22,6 +22,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://agent:${POSTGRES_PASSWORD}@postgres:5432/agent
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      DEEPSEEK_VISION_MODEL: ${DEEPSEEK_VISION_MODEL:-deepseek-v4-flash-vision-exp}
       CHAT_CONTEXT_MESSAGE_LIMIT: ${CHAT_CONTEXT_MESSAGE_LIMIT:-50}
       AGENT_MAX_TOOL_ROUNDS: ${AGENT_MAX_TOOL_ROUNDS:-4}
       AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-6}

@@ -42,7 +42,8 @@ async def create_tables() -> None:
         await connection.execute(text("""
             ALTER TABLE messages
             ADD COLUMN IF NOT EXISTS sources JSONB NOT NULL DEFAULT '[]'::jsonb,
-            ADD COLUMN IF NOT EXISTS options JSONB NOT NULL DEFAULT '{}'::jsonb
+            ADD COLUMN IF NOT EXISTS options JSONB NOT NULL DEFAULT '{}'::jsonb,
+            ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb
         """))
         await connection.execute(text("""
             ALTER TABLE agent_runs

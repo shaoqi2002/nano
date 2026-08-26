@@ -261,9 +261,20 @@ def decode_text(content: bytes) -> str:
 
 def word_text(content: bytes) -> str:
     from io import BytesIO
+    from zipfile import BadZipFile, ZipFile
 
     try:
+        with ZipFile(BytesIO(content)) as archive:
+            entries = archive.infolist()
+            if len(entries) > 10_000 or sum(item.file_size for item in entries) > 50 * 1024 * 1024:
+                raise InvalidDocumentError("DOCX 解压后内容过大")
+            if "word/document.xml" not in {item.filename for item in entries}:
+                raise InvalidDocumentError("DOCX 缺少正文内容")
         document = WordDocument(BytesIO(content))
+    except InvalidDocumentError:
+        raise
+    except BadZipFile as error:
+        raise InvalidDocumentError("DOCX 文件无法解析") from error
     except Exception as error:
         raise InvalidDocumentError("DOCX 文件无法解析") from error
 
@@ -272,6 +283,18 @@ def word_text(content: bytes) -> str:
         for row in table.rows:
             blocks.append("\t".join(cell.text for cell in row.cells))
     return "\n\n".join(blocks)
+
+
+def pdf_text(content: bytes) -> str:
+    from io import BytesIO
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(BytesIO(content))
+        blocks = [page.extract_text() or "" for page in reader.pages]
+    except Exception as error:
+        raise InvalidDocumentError("PDF 文件无法解析") from error
+    return "\n\n".join(block for block in blocks if block.strip())
 
 
 def cached_document_path(document: Document) -> Path:

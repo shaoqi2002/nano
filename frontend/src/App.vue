@@ -18,6 +18,15 @@ import DocumentsView from "./DocumentsView.vue";
 import EvaluationsView from "./EvaluationsView.vue";
 import JobApplicationsView from "./JobApplicationsView.vue";
 import { renderMarkdown } from "./markdown";
+import {
+  CHAT_ATTACHMENT_ACCEPT,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENTS,
+  attachmentPayload,
+  attachmentPreviewUrl,
+  attachmentTypeLabel,
+  fileToChatAttachment,
+} from "./chatAttachments";
 
 
 const ACTIVE_KEY = "nano-agent-active-conversation";
@@ -41,6 +50,9 @@ const errorMessage = ref("");
 const sidebarOpen = ref(false);
 const messageList = ref(null);
 const composer = ref(null);
+const chatFileInput = ref(null);
+const pendingAttachments = ref([]);
+const composerDragging = ref(false);
 const apiKey = ref(localStorage.getItem(API_KEY_STORAGE_KEY) || "");
 const apiKeyDraft = ref("");
 const tavilyApiKey = ref(localStorage.getItem(TAVILY_API_KEY_STORAGE_KEY) || "");
@@ -81,8 +93,50 @@ const activeConversation = computed(() =>
 );
 
 const canSend = computed(
-  () => draft.value.trim().length > 0 && !isSending.value && activeConversationId.value,
+  () => (draft.value.trim().length > 0 || pendingAttachments.value.length > 0)
+    && !isSending.value && activeConversationId.value,
 );
+
+async function addChatFiles(fileList) {
+  const files = [...(fileList || [])];
+  if (!files.length) return;
+  const available = MAX_CHAT_ATTACHMENTS - pendingAttachments.value.length;
+  if (files.length > available) {
+    errorMessage.value = `每条消息最多添加 ${MAX_CHAT_ATTACHMENTS} 个附件`;
+  }
+  for (const file of files.slice(0, Math.max(0, available))) {
+    try {
+      const currentBytes = pendingAttachments.value.reduce(
+        (total, attachment) => total + (attachment.byteSize || 0), 0,
+      );
+      if (currentBytes + file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+        throw new Error("每条消息的附件总大小不能超过 15 MB");
+      }
+      pendingAttachments.value.push(await fileToChatAttachment(file));
+      errorMessage.value = "";
+    } catch (error) {
+      errorMessage.value = error.message;
+      break;
+    }
+  }
+  if (chatFileInput.value) chatFileInput.value.value = "";
+}
+
+function removeChatAttachment(index) {
+  pendingAttachments.value.splice(index, 1);
+}
+
+function handleComposerPaste(event) {
+  const files = [...(event.clipboardData?.files || [])];
+  if (!files.length) return;
+  event.preventDefault();
+  void addChatFiles(files);
+}
+
+function handleComposerDrop(event) {
+  composerDragging.value = false;
+  void addChatFiles(event.dataTransfer?.files);
+}
 
 const apiKeyStatusLabel = computed(() => {
   const count = [apiKey.value, tavilyApiKey.value, embeddingApiKey.value]
@@ -518,7 +572,7 @@ function stopGeneration() {
 
 async function submitMessage() {
   const content = draft.value.trim();
-  if (!content || !canSend.value) return;
+  if (!canSend.value) return;
 
   if (!apiKey.value) {
     errorMessage.value = "请先在左下角设置 DeepSeek API Key";
@@ -528,10 +582,12 @@ async function submitMessage() {
 
   const conversationId = activeConversationId.value;
   const writeToolsAuthorized = allowWriteTools.value;
+  const attachments = pendingAttachments.value.map(attachmentPayload);
   const optimisticMessage = {
     id: `local-${Date.now()}`,
     role: "user",
     content,
+    attachments: pendingAttachments.value.slice(),
     created_at: new Date().toISOString(),
     options: {
       mode: agentMode.value,
@@ -552,8 +608,9 @@ async function submitMessage() {
   });
 
   messages.value.push(optimisticMessage, streamingMessage);
-  updateConversationTitle(content);
+  updateConversationTitle(content || attachments[0]?.name || "附件");
   draft.value = "";
+  pendingAttachments.value = [];
   allowWriteTools.value = false;
   errorMessage.value = "";
   isSending.value = true;
@@ -572,6 +629,7 @@ async function submitMessage() {
       embeddingApiKey.value,
       embeddingBaseUrl.value,
       writeToolsAuthorized,
+      attachments,
       (event) => handleStreamEvent(streamingMessage, event),
       streamController.value.signal,
     );
@@ -915,7 +973,23 @@ onMounted(async () => {
                 class="message__content markdown-body"
                 v-html="renderMarkdown(message.content)"
               />
-              <div v-else class="message__content">{{ message.content }}</div>
+              <div v-if="message.role === 'user' && message.attachments?.length" class="message-attachments">
+                <figure
+                  v-for="(attachment, index) in message.attachments"
+                  :key="`${attachment.name}-${index}`"
+                  class="message-attachment"
+                  :class="`message-attachment--${attachment.kind}`"
+                >
+                  <img
+                    v-if="attachment.kind === 'image'"
+                    :src="attachmentPreviewUrl(attachment)"
+                    :alt="attachment.name"
+                  />
+                  <span v-else class="message-attachment__icon">{{ attachmentTypeLabel(attachment) }}</span>
+                  <figcaption>{{ attachment.name }}</figcaption>
+                </figure>
+              </div>
+              <div v-if="message.role === 'user' && message.content" class="message__content">{{ message.content }}</div>
               <div
                 v-if="message.role === 'user' && message.options?.mode"
                 class="message-options"
@@ -968,7 +1042,47 @@ onMounted(async () => {
         <div v-if="errorMessage" class="error-banner" role="alert">
           {{ errorMessage }}
         </div>
-        <div class="composer-box">
+        <div
+          class="composer-box"
+          :class="{ 'composer-box--dragging': composerDragging }"
+          @dragenter.prevent="composerDragging = true"
+          @dragover.prevent="composerDragging = true"
+          @dragleave.self="composerDragging = false"
+          @drop.prevent="handleComposerDrop"
+        >
+          <div v-if="pendingAttachments.length" class="pending-attachments">
+            <div
+              v-for="(attachment, index) in pendingAttachments"
+              :key="`${attachment.name}-${index}`"
+              class="pending-attachment"
+            >
+              <img
+                v-if="attachment.kind === 'image'"
+                :src="attachmentPreviewUrl(attachment)"
+                :alt="attachment.name"
+              />
+              <span v-else class="pending-attachment__icon">{{ attachmentTypeLabel(attachment) }}</span>
+              <span class="pending-attachment__name" :title="attachment.name">{{ attachment.name }}</span>
+              <button type="button" aria-label="移除附件" @click="removeChatAttachment(index)">×</button>
+            </div>
+          </div>
+          <div class="composer-input-row">
+          <input
+            ref="chatFileInput"
+            class="visually-hidden"
+            type="file"
+            multiple
+            :accept="CHAT_ATTACHMENT_ACCEPT"
+            @change="addChatFiles($event.target.files)"
+          />
+          <button
+            type="button"
+            class="attach-button"
+            :disabled="isSending || pendingAttachments.length >= MAX_CHAT_ATTACHMENTS"
+            aria-label="添加文本或图片附件"
+            title="添加文本或图片"
+            @click="chatFileInput?.click()"
+          >＋</button>
           <textarea
             ref="composer"
             v-model="draft"
@@ -977,6 +1091,7 @@ onMounted(async () => {
             placeholder="给 Nano 发消息"
             aria-label="消息内容"
             @input="resizeComposer"
+            @paste="handleComposerPaste"
             @keydown="handleComposerKeydown"
           />
           <button
@@ -996,6 +1111,7 @@ onMounted(async () => {
           >
             ↑
           </button>
+          </div>
         </div>
         <div class="composer-options">
           <div class="mode-selector" aria-label="Agent 模式">

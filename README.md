@@ -32,6 +32,7 @@ Supervisor（拆解任务并选择 specialist）
 - LangGraph `StateGraph`、`Send` 并行分发和 PostgreSQL checkpoint 恢复
 - Supervisor-worker 路由、角色化提示词和 least-privilege 工具策略
 - SSE 流式回答、节点进度、工具调用与 multi-agent handoff 事件
+- 聊天内选择、拖放或粘贴文本、图片、PDF、DOCX 附件；附件随消息发送，不进入 RAG 文档库
 - 可取消/恢复的 Agent Run，以及持久化 trace、耗时和失败指标
 - 本地文档 RAG、网页搜索/提取和来源展示
 - 版本化 golden dataset、规则评分和 LLM-as-a-judge 评测
@@ -54,6 +55,13 @@ Supervisor（拆解任务并选择 specialist）
 
 DeepSeek 和 Tavily API Key 由前端请求头传入，不会写入 Agent trace。部署配置见
 [`DEPLOYMENT.md`](DEPLOYMENT.md) 和 [`.env.production.example`](.env.production.example)。
+
+聊天附件每条最多 8 个：单个文本文件上限 200 KB，单张图片上限 5 MB，PDF/DOCX 单个上限
+10 MB，总上限 15 MB。文本、PDF 和 DOCX 会在本次聊天请求中直接解析为用户上下文，不创建
+文档库记录，也不进入 RAG；扫描版 PDF 需要 OCR，当前只能读取其中已有的文本层。图片会转换
+为 OpenAI 兼容的 `image_url` 内容块并随聊天
+历史保存。包含图片的上下文会自动路由到 `deepseek-v4-flash-vision-exp`，纯文本对话仍使用
+`DEEPSEEK_MODEL`。可通过 `DEEPSEEK_VISION_MODEL` 覆盖视觉模型名称。
 
 ## 验证
 

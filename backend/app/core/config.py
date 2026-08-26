@@ -8,6 +8,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BACKEND_DIR / ".env")
 
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+DEEPSEEK_VISION_MODEL = os.getenv(
+    "DEEPSEEK_VISION_MODEL", "deepseek-v4-flash-vision-exp"
+)
 EVAL_JUDGE_MODEL = os.getenv("EVAL_JUDGE_MODEL", DEEPSEEK_MODEL)
 CHAT_CONTEXT_MESSAGE_LIMIT = int(os.getenv("CHAT_CONTEXT_MESSAGE_LIMIT", "50"))
 AGENT_MAX_TOOL_ROUNDS = int(os.getenv("AGENT_MAX_TOOL_ROUNDS", "4"))

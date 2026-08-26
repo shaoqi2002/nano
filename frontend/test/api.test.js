@@ -262,6 +262,7 @@ test("sends the selected agent mode", async () => {
     );
     assert.deepEqual(JSON.parse(capturedOptions.body), {
       message: "research this",
+      attachments: [],
       use_rag: true,
       mode: "research",
       allow_write_tools: true,

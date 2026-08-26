@@ -56,7 +56,7 @@ export function getMessages(conversationId) {
   return request(`/conversations/${conversationId}/messages`);
 }
 
-export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true, mode = "auto", embeddingApiKey = "", embeddingBaseUrl = "", allowWriteTools = false) {
+export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRag = true, mode = "auto", embeddingApiKey = "", embeddingBaseUrl = "", allowWriteTools = false, attachments = []) {
   const headers = {
     "X-DeepSeek-API-Key": apiKey,
   };
@@ -68,7 +68,7 @@ export function sendMessage(conversationId, message, apiKey, tavilyApiKey, useRa
   return request(`/conversations/${conversationId}/messages`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ message, use_rag: useRag, mode, allow_write_tools: allowWriteTools }),
+    body: JSON.stringify({ message, attachments, use_rag: useRag, mode, allow_write_tools: allowWriteTools }),
   });
 }
 
@@ -115,6 +115,7 @@ export async function sendMessageStream(
   embeddingApiKey,
   embeddingBaseUrl,
   allowWriteTools,
+  attachments,
   onEvent,
   signal,
 ) {
@@ -128,7 +129,7 @@ export async function sendMessageStream(
   const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages/stream`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ message, use_rag: useRag, mode, allow_write_tools: allowWriteTools }),
+    body: JSON.stringify({ message, attachments, use_rag: useRag, mode, allow_write_tools: allowWriteTools }),
     signal,
   });
   if (!response.ok) {

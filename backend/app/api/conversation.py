@@ -24,7 +24,9 @@ from app.service.conversation import (
     delete_existing_conversation,
     get_conversation_messages,
     get_conversations,
+    prepare_chat_attachments,
 )
+from app.service.document import InvalidDocumentError
 from app.service.agent_run import stream_new_run
 from app.repository.agent_run import get_run_ids_by_assistant_message_ids
 
@@ -92,6 +94,9 @@ async def create_message(
     ] = None,
 ) -> SendMessageResponse:
     try:
+        attachments = await prepare_chat_attachments(
+            [item.model_dump() for item in request.attachments]
+        )
         assistant_payload: dict | None = None
         stream = stream_new_run(
             session=session,
@@ -104,6 +109,7 @@ async def create_message(
             use_rag=request.use_rag,
             requested_mode=request.mode,
             allow_write_tools=request.allow_write_tools,
+            attachments=attachments,
             checkpointer=http_request.app.state.agent_checkpointer,
         )
         async for event in stream:
@@ -114,6 +120,8 @@ async def create_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found",
         ) from error
+    except InvalidDocumentError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
     if assistant_payload is None:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -149,6 +157,13 @@ async def create_message_stream(
         Header(alias="X-Embedding-Base-URL", min_length=1, max_length=500),
     ] = None,
 ) -> StreamingResponse:
+    try:
+        attachments = await prepare_chat_attachments(
+            [item.model_dump() for item in request.attachments]
+        )
+    except InvalidDocumentError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+
     async def generate():
         stream = stream_new_run(
             session=session,
@@ -161,6 +176,7 @@ async def create_message_stream(
             use_rag=request.use_rag,
             requested_mode=request.mode,
             allow_write_tools=request.allow_write_tools,
+            attachments=attachments,
             checkpointer=http_request.app.state.agent_checkpointer,
         )
         pending: asyncio.Task | None = None
