@@ -112,6 +112,7 @@ class ChatArtifactToolTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(created_output["kind"], "presentation")
+        self.assertTrue(created["selected_theme"].startswith("adaptive-"))
         self.assertEqual(edited["outputs"][0]["kind"], "presentation")
         self.assertEqual(edited["edit_summary"]["replacements"], 1)
         self.assertEqual(edited_deck.core_properties.title, "旧标题")

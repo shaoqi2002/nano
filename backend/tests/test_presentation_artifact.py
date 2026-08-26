@@ -5,9 +5,11 @@ from pathlib import Path
 from pptx import Presentation
 
 from app.service.presentation_artifact import (
+    _normalize_slide_spec,
     create_presentation,
     edit_presentation,
     presentation_text,
+    select_theme_for_content,
 )
 
 
@@ -104,6 +106,79 @@ class PresentationArtifactTests(unittest.TestCase):
                 create_presentation(
                     Path(directory) / "empty.pptx", "标题", "", [{}]
                 )
+
+    def test_supports_themes_visual_layouts_and_automatic_splitting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "visual.pptx"
+            create_presentation(
+                output,
+                "视觉升级",
+                "modern 主题",
+                [
+                    {"type": "statement", "title": "核心判断", "text": "每一页只表达一个关键观点。"},
+                    {"type": "metric", "title": "增长", "value": "42%", "label": "年度增长率", "context": "增长主要来自企业客户。"},
+                    {"type": "process", "title": "实施路径", "steps": ["规划", "设计", "生成", "检查"]},
+                    {"title": "九项能力", "bullets": [f"能力 {index}" for index in range(1, 10)]},
+                ],
+                theme_name="modern",
+            )
+
+            deck = Presentation(output)
+            extracted = presentation_text(output.read_bytes())
+            self.assertEqual(len(deck.slides), 6)
+            self.assertIn("42%", extracted)
+            self.assertIn("九项能力（续）", extracted)
+
+    def test_automatically_selects_theme_from_deck_content(self) -> None:
+        first = select_theme_for_content("AI 智能体技术架构", "", [])
+        repeated = select_theme_for_content("AI 智能体技术架构", "", [])
+        different = select_theme_for_content("品牌创意与用户体验", "", [])
+        branded = select_theme_for_content(
+            "品牌发布",
+            "",
+            [],
+            {
+                "mood": "克制而有力量",
+                "mode": "dark",
+                "primary_color": "#112233",
+                "accent_color": "#FF8800",
+            },
+        )
+
+        self.assertTrue(first.name.startswith("adaptive-"))
+        self.assertEqual(first, repeated)
+        self.assertNotEqual(first.accent, different.accent)
+        self.assertEqual(tuple(branded.primary), (0x11, 0x22, 0x33))
+        self.assertEqual(tuple(branded.accent), (0xFF, 0x88, 0x00))
+        with self.assertRaisesRegex(Exception, "#RRGGBB"):
+            select_theme_for_content(
+                "无效品牌色", "", [], {"primary_color": "blue"}
+            )
+
+    def test_automatically_infers_layout_from_slide_content(self) -> None:
+        statement = _normalize_slide_spec({
+            "title": "核心结论",
+            "content": "增长来自高价值企业客户。",
+        })
+        metric = _normalize_slide_spec({
+            "title": "年度增长率",
+            "content": "用户规模同比增长 42%，主要来自企业客户。",
+        })
+        process = _normalize_slide_spec({
+            "title": "实施步骤",
+            "bullets": ["规划", "设计", "上线"],
+        })
+        explicit = _normalize_slide_spec({
+            "type": "content",
+            "title": "核心结论",
+            "content": "保持普通正文布局。",
+        })
+
+        self.assertEqual(statement["type"], "statement")
+        self.assertEqual(metric["type"], "metric")
+        self.assertEqual(metric["value"], "42%")
+        self.assertEqual(process["type"], "process")
+        self.assertEqual(explicit["type"], "content")
 
 
 if __name__ == "__main__":

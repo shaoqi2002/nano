@@ -133,15 +133,19 @@ async def presentation_create(
     title: str,
     slides: list[dict[str, Any]],
     subtitle: str = "",
+    theme: str = "auto",
+    design: dict[str, Any] | None = None,
 ) -> dict:
-    """生成可直接下载的 16:9 PPTX。每页至少提供 title/heading 和 content/body/bullets/blocks 之一；例如 {"title":"摘要","bullets":["要点一","要点二"]}。复杂布局支持 content(blocks)、section、two_column(left/right) 和 table(headers/rows)，blocks 支持 heading、paragraph、bullets、numbered、quote。"""
+    """生成美观的 16:9 PPTX。theme 默认 auto，会根据整份内容动态生成协调色板，不受有限模板约束。可用 design 传入开放式视觉描述，例如 mood、mode(light/dark)及可选 primary_color、accent_color、background_color、text_color；用户明确指定旧预设 business、modern、tech 时仍兼容。系统也会自动识别核心结论、关键数字和流程步骤并匹配版式。"""
     name = safe_artifact_filename(filename, ".pptx")
     with tempfile.TemporaryDirectory(prefix="nano-ppt-") as directory:
         path = Path(directory) / name
-        await run_in_threadpool(create_presentation, path, title, subtitle, slides)
+        selected_theme = await run_in_threadpool(
+            create_presentation, path, title, subtitle, slides, theme, design
+        )
         output = await run_in_threadpool(store_chat_artifact, path, name)
         output["kind"] = "presentation"
-        return {"outputs": [output]}
+        return {"outputs": [output], "selected_theme": selected_theme}
 
 
 @tool
