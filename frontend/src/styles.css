@@ -1883,27 +1883,53 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   margin: 2px 12px 14px;
-  padding: 10px 12px;
+  padding: 11px 12px;
   border: 1px solid #3e3e3e;
   border-radius: 12px;
   background: #292929;
 }
 
-.workspace-switcher > div:first-child { min-width: 0; display: grid; gap: 2px; }
-.workspace-switcher span { color: #858585; font-size: 11px; }
-.workspace-switcher strong { overflow: hidden; color: #dededc; font-size: 13px; text-overflow: ellipsis; }
+.workspace-switcher > div:first-child { min-width: 0; display: grid; gap: 3px; }
+.workspace-switcher span {
+  color: #858585;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.workspace-switcher strong {
+  overflow: hidden;
+  color: #f0f0ee;
+  font-size: 15px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .workspace-switcher button {
-  border: 0;
-  color: #aaa;
-  background: transparent;
+  min-width: 42px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #474747;
+  border-radius: 8px;
+  color: #b8b8b6;
+  background: #303030;
   font: inherit;
   font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
 }
-.workspace-switcher button:hover { color: #fff; }
+.workspace-switcher button:hover { border-color: #5a5a5a; color: #fff; background: #383838; }
 .workspace-switcher button:disabled { opacity: 0.4; cursor: default; }
-.workspace-switcher__actions { display: flex; align-items: center; gap: 4px; }
-.workspace-switcher .workspace-switcher__delete { color: #d98b86; }
-.workspace-switcher .workspace-switcher__delete:hover:not(:disabled) { color: #ffaaa5; }
+.workspace-switcher__actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.workspace-switcher .workspace-switcher__delete {
+  border-color: rgba(224, 122, 116, 0.28);
+  color: #dc8e89;
+  background: rgba(126, 54, 50, 0.14);
+}
+.workspace-switcher .workspace-switcher__delete:hover:not(:disabled) {
+  border-color: rgba(255, 170, 165, 0.46);
+  color: #ffaaa5;
+  background: rgba(126, 54, 50, 0.24);
+}

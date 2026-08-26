@@ -1090,18 +1090,24 @@ onMounted(async () => {
 
       <div class="workspace-switcher">
         <div>
-          <span>当前 workspace</span>
+          <span>当前工作区</span>
           <strong>{{ activeWorkspace.name }}</strong>
         </div>
         <div class="workspace-switcher__actions">
           <button
+            v-if="activeWorkspace.slug !== 'ch4'"
             type="button"
             class="workspace-switcher__delete"
-            :disabled="isSending || workspaceDeleting || activeWorkspace.slug === 'ch4'"
-            :title="activeWorkspace.slug === 'ch4' ? 'ch4 是系统 workspace，不能删除' : '永久删除当前 workspace'"
+            :disabled="isSending || workspaceDeleting"
+            title="永久删除当前工作区"
             @click="removeActiveWorkspace"
-          >删除工作区</button>
-          <button type="button" :disabled="isSending || workspaceDeleting" @click="leaveWorkspace">退出</button>
+          >删除</button>
+          <button
+            type="button"
+            class="workspace-switcher__exit"
+            :disabled="isSending || workspaceDeleting"
+            @click="leaveWorkspace"
+          >退出</button>
         </div>
       </div>
 
