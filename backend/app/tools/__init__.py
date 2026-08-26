@@ -28,6 +28,7 @@ def create_tool_registry(tavily_api_key: str | None) -> ToolRegistry:
             category="documents" if tool.name.startswith("word_") else "local",
             risk_level="write",
             side_effect=True,
+            safe_artifact_write=tool.name.startswith("word_"),
             idempotent=False,
             timeout_seconds=180.0 if tool.name.startswith("word_") else 10.0,
             allowed_agents=frozenset({"chat_agent"}),

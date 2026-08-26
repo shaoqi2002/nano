@@ -17,6 +17,7 @@ class ToolSpec:
     category: str
     risk_level: RiskLevel = "read"
     side_effect: bool = False
+    safe_artifact_write: bool = False
     idempotent: bool = True
     timeout_seconds: float = 30.0
     max_retries: int = 0
@@ -35,3 +36,5 @@ class ToolSpec:
             raise ValueError("Tool timeout must be positive")
         if self.max_retries < 0:
             raise ValueError("Tool retries cannot be negative")
+        if self.safe_artifact_write and not self.side_effect:
+            raise ValueError("Safe artifact writes must be side-effecting tools")

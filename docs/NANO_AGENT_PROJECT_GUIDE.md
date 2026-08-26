@@ -122,7 +122,7 @@ Nano 采用第二种。LangGraph 的 `StateGraph` 明确定义状态、节点和
 `frontend/src/api.js` 中的 `sendMessageStream`：
 
 1. 在请求头中放入 DeepSeek、Tavily 和 Embedding 配置。
-2. 请求体发送问题、`use_rag`、`mode` 和 `allow_write_tools`。
+2. 请求体发送问题、`use_rag` 和 `mode`；`allow_write_tools` 仅保留给高级 API 调用方。
 3. 使用 `fetch` 获取响应体，而不是使用只支持 GET 的浏览器 `EventSource`。
 4. `consumeEventStream` 按空行切分 SSE block，解析 `event:` 和 `data:`。
 
@@ -335,7 +335,7 @@ Writer 读取所有结构化研究结果，生成带来源的报告。Reviewer �
 
 Web Search 只返回受长度限制的摘要；需要核对细节时再用 Web Extract 读取原文。Extract 校验 HTTP(S)、拒绝凭据、本地地址和非公网 IP，用于降低 SSRF 风险。Deep Research 是 Tavily 异步任务：先创建任务，再轮询状态，受总超时和最大返回长度限制。
 
-本地文件工具把所有路径解析到 `AGENT_WORKSPACE_DIR` 下，拒绝绝对路径和路径穿越。写工具默认关闭，只有前端为本次请求开启 `allow_write_tools` 才允许执行；前端发送后会重置开关，减少用户忘记关闭的风险。
+本地文件工具把所有路径解析到 `AGENT_WORKSPACE_DIR` 下，拒绝绝对路径和路径穿越。Word 创建、另存编辑版本和 PDF 转换只生成新产物，在用户直接提出文档操作时自动允许。文本覆盖和文件移动仍需 API 调用方显式设置 `allow_write_tools`；网页、RAG 和附件中的指令不得触发写操作。
 
 ### 8.3 风险模型仍可继续完善
 
@@ -491,7 +491,7 @@ AgentEvalRun
 
 前端包含三个主要视图：
 
-- Chat：对话、模式选择、RAG/写工具开关、流式进度、来源和 Trace。
+- Chat：对话、模式选择、RAG 开关、流式进度、来源和 Trace。
 - Documents：上传、预览、删除、索引状态和重新索引。
 - Evaluations：用例选择/编辑、Judge 和 baseline 配置、运行进度及结果比较。
 

@@ -78,7 +78,6 @@ const embeddingStatusError = ref("");
 let embeddingStatusRequestId = 0;
 const deletingConversationId = ref(null);
 const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
-const allowWriteTools = ref(false);
 const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
 const documentTarget = ref({ id: null, page: null });
 const streamController = ref(null);
@@ -581,7 +580,6 @@ async function submitMessage() {
   }
 
   const conversationId = activeConversationId.value;
-  const writeToolsAuthorized = allowWriteTools.value;
   const attachments = pendingAttachments.value.map(attachmentPayload);
   const optimisticMessage = {
     id: `local-${Date.now()}`,
@@ -592,7 +590,6 @@ async function submitMessage() {
     options: {
       mode: agentMode.value,
       use_rag: useRag.value,
-      allow_write_tools: writeToolsAuthorized,
     },
   };
   const streamingMessage = reactive({
@@ -611,7 +608,6 @@ async function submitMessage() {
   updateConversationTitle(content || attachments[0]?.name || "附件");
   draft.value = "";
   pendingAttachments.value = [];
-  allowWriteTools.value = false;
   errorMessage.value = "";
   isSending.value = true;
   streamController.value = new AbortController();
@@ -628,7 +624,6 @@ async function submitMessage() {
       agentMode.value,
       embeddingApiKey.value,
       embeddingBaseUrl.value,
-      writeToolsAuthorized,
       attachments,
       (event) => handleStreamEvent(streamingMessage, event),
       streamController.value.signal,
@@ -996,7 +991,6 @@ onMounted(async () => {
               >
                 <span>{{ messageModeLabel(message.options.mode) }}</span>
                 <span v-if="message.options.use_rag">文档 RAG</span>
-                <span v-if="message.options.allow_write_tools">写工具</span>
               </div>
               <div v-if="message.role === 'assistant' && message.sources?.length" class="message-sources">
                 <button
@@ -1148,13 +1142,6 @@ onMounted(async () => {
             :aria-pressed="useRag"
             @click="toggleRag"
           >文档 RAG {{ useRag ? "已开启" : "已关闭" }}</button>
-          <button
-            type="button"
-            class="rag-toggle"
-            :class="{ 'rag-toggle--active': allowWriteTools }"
-            :aria-pressed="allowWriteTools"
-            @click="allowWriteTools = !allowWriteTools"
-          >写工具 {{ allowWriteTools ? "已授权" : "未授权" }}</button>
           <p class="composer-hint">Enter 发送 · Shift + Enter 换行</p>
         </div>
       </footer>

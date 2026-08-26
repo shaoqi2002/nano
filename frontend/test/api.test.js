@@ -258,14 +258,13 @@ test("sends the selected agent mode", async () => {
   try {
     await sendMessage(
       "conversation-1", "research this", "sk-test", "", true, "research",
-      "sk-embedding", "https://dashscope.aliyuncs.com/compatible-mode/v1", true,
+      "sk-embedding", "https://dashscope.aliyuncs.com/compatible-mode/v1",
     );
     assert.deepEqual(JSON.parse(capturedOptions.body), {
       message: "research this",
       attachments: [],
       use_rag: true,
       mode: "research",
-      allow_write_tools: true,
     });
     assert.equal(capturedOptions.headers["X-Embedding-API-Key"], "sk-embedding");
     assert.equal(

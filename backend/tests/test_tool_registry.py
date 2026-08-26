@@ -110,6 +110,28 @@ class ToolRegistryTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.value, "allowed")
 
+    async def test_safe_artifact_write_does_not_require_upfront_authorization(self) -> None:
+        @tool
+        async def create_artifact(content: str) -> str:
+            """Create a new, non-overwriting artifact."""
+            return content
+
+        spec = ToolSpec(
+            name="create_artifact",
+            version="1.0.0",
+            tool=create_artifact,
+            category="documents",
+            risk_level="write",
+            side_effect=True,
+            safe_artifact_write=True,
+        )
+        result = await ToolRegistry([spec]).executor.execute(
+            spec,
+            {"content": "created"},
+            ToolContext(run_id="run", conversation_id="conversation"),
+        )
+        self.assertEqual(result.value, "created")
+
 
 if __name__ == "__main__":
     unittest.main()
