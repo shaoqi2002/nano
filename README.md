@@ -33,6 +33,7 @@ Supervisor（拆解任务并选择 specialist）
 - Supervisor-worker 路由、角色化提示词和 least-privilege 工具策略
 - SSE 流式回答、节点进度、工具调用与 multi-agent handoff 事件
 - 聊天内选择、拖放或粘贴文本、图片、PDF、DOCX 附件；附件随消息发送，不进入 RAG 文档库
+- 进入应用前选择或创建 workspace；对话、文档、运行记录、评测和投递数据按 workspace 隔离
 - 可取消/恢复的 Agent Run，以及持久化 trace、耗时和失败指标
 - 本地文档 RAG、网页搜索/提取和来源展示
 - 版本化 golden dataset、规则评分和 LLM-as-a-judge 评测
@@ -55,6 +56,10 @@ Supervisor（拆解任务并选择 specialist）
 
 DeepSeek 和 Tavily API Key 由前端请求头传入，不会写入 Agent trace。部署配置见
 [`DEPLOYMENT.md`](DEPLOYMENT.md) 和 [`.env.production.example`](.env.production.example)。
+
+首次启动会创建 `ch4` workspace，并把升级前已有的对话、文档、Agent Run、Eval 和求职投递
+记录迁移到其中。进入 Nano 前必须选择或创建 workspace；退出后可重新选择。普通 workspace
+只显示聊天和文档库，Agent Eval 与求职投递仅在 `ch4` 中显示，并由后端同步限制访问。
 
 聊天附件每条最多 8 个：单个文本文件上限 200 KB，单张图片上限 5 MB，PDF/DOCX 单个上限
 10 MB，总上限 15 MB。文本、PDF 和 DOCX 会在本次聊天请求中直接解析为用户上下文，不创建

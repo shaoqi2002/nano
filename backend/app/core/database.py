@@ -30,6 +30,45 @@ async def create_tables() -> None:
     async with engine.begin() as connection:
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await connection.run_sync(Base.metadata.create_all)
+        # Stable built-in workspace. Existing records are assigned to it before
+        # workspace columns become mandatory.
+        await connection.execute(text("""
+            INSERT INTO workspaces (id, name, slug)
+            VALUES ('00000000-0000-0000-0000-0000000000c4', 'ch4', 'ch4')
+            ON CONFLICT (id) DO NOTHING
+        """))
+        for table_name in (
+            "conversations",
+            "documents",
+            "job_applications",
+            "agent_eval_runs",
+            "agent_eval_cases",
+        ):
+            await connection.execute(text(f"""
+                ALTER TABLE {table_name}
+                ADD COLUMN IF NOT EXISTS workspace_id UUID
+            """))
+            await connection.execute(text(f"""
+                UPDATE {table_name}
+                SET workspace_id = '00000000-0000-0000-0000-0000000000c4'
+                WHERE workspace_id IS NULL
+            """))
+            await connection.execute(text(f"""
+                ALTER TABLE {table_name}
+                ALTER COLUMN workspace_id SET NOT NULL
+            """))
+            await connection.execute(text(f"""
+                CREATE INDEX IF NOT EXISTS ix_{table_name}_workspace_id
+                ON {table_name} (workspace_id)
+            """))
+            await connection.execute(text(f"""
+                DO $$ BEGIN
+                    ALTER TABLE {table_name}
+                    ADD CONSTRAINT fk_{table_name}_workspace_id
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE;
+                EXCEPTION WHEN duplicate_object THEN NULL;
+                END $$
+            """))
         # create_all does not alter installations that already contain these tables.
         await connection.execute(text("""
             ALTER TABLE documents

@@ -15,6 +15,8 @@ import {
   sendMessage,
   runEvalStream,
   restorePresetEvalCases,
+  setActiveWorkspaceId,
+  listConversations,
   updateEvalCase,
   uploadDocument,
   updateJobApplicationStatus,
@@ -27,6 +29,31 @@ test("builds inline and download document URLs", () => {
     documentContentUrl("doc-1", true),
     "/api/documents/doc-1/content?download=true",
   );
+});
+
+test("scopes requests and document links to the active workspace", async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return { ok: true, status: 200, json: async () => [] };
+  };
+
+  setActiveWorkspaceId("00000000-0000-0000-0000-0000000000c4");
+  try {
+    await listConversations();
+    assert.equal(
+      captured.options.headers["X-Workspace-ID"],
+      "00000000-0000-0000-0000-0000000000c4",
+    );
+    assert.equal(
+      documentContentUrl("doc-1", true),
+      "/api/documents/doc-1/content?download=true&workspace_id=00000000-0000-0000-0000-0000000000c4",
+    );
+  } finally {
+    setActiveWorkspaceId("");
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("creates job applications and updates their status", async () => {

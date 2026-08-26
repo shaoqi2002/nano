@@ -8,6 +8,7 @@ from app.model.agent_eval import (
 from app.model.conversation import Conversation, Message
 from app.model.document import Document, DocumentChunk
 from app.model.job_application import JobApplication, JobApplicationEvent
+from app.model.workspace import Workspace
 
 __all__ = [
     "AgentRun",
@@ -22,4 +23,5 @@ __all__ = [
     "Message",
     "JobApplication",
     "JobApplicationEvent",
+    "Workspace",
 ]

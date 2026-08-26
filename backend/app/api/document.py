@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.core.database import get_db_session
+from app.service.workspace import get_workspace_session
 from app.schema.document import DocumentResponse
 from app.service.document import (
     DocumentNotFoundError,
@@ -37,7 +37,7 @@ from app.service.object_storage import (
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDependency = Annotated[AsyncSession, Depends(get_workspace_session)]
 
 
 def storage_http_error(error: Exception) -> HTTPException:

@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db_session
+from app.service.workspace import current_workspace_id, get_ch4_workspace_session
 from app.model.job_application import JobApplication, JobApplicationEvent
 from app.repository.job_application import get_job_application, list_job_applications
 from app.schema.job_application import (
@@ -17,7 +17,7 @@ from app.service.job_application import infer_job_information_with_agent
 
 
 router = APIRouter(prefix="/job-applications", tags=["job-applications"])
-SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDependency = Annotated[AsyncSession, Depends(get_ch4_workspace_session)]
 
 
 async def require_application(
@@ -55,7 +55,12 @@ async def create_job_application(
     inferred = await infer_job_information_with_agent(
         body.job_url, body.notes, deepseek_api_key, tavily_api_key
     )
-    application = JobApplication(job_url=body.job_url, notes=body.notes, **inferred)
+    application = JobApplication(
+        workspace_id=current_workspace_id(session),
+        job_url=body.job_url,
+        notes=body.notes,
+        **inferred,
+    )
     event = JobApplicationEvent(to_status="applied", note="新增投递记录")
     application.events.append(event)
     async with session.begin():

@@ -1794,3 +1794,112 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+.workspace-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(104, 226, 193, 0.08), transparent 34%),
+    #202020;
+  color: #f4f4f2;
+}
+
+.workspace-gate__card {
+  width: min(100%, 520px);
+  display: grid;
+  gap: 28px;
+  padding: 34px;
+  border: 1px solid #3d3d3d;
+  border-radius: 24px;
+  background: #272727;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+.workspace-gate__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.workspace-gate__brand span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #202020;
+  background: #f4f4f2;
+}
+
+.workspace-gate__eyebrow {
+  margin: 0 0 8px;
+  color: #72dcc0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.workspace-gate h1 { margin: 0 0 8px; font-size: 30px; }
+.workspace-gate h1 + p { margin: 0; color: #aaa; line-height: 1.6; }
+
+.workspace-gate__form { display: grid; gap: 14px; }
+.workspace-gate__form label { display: grid; gap: 8px; color: #c7c7c7; font-size: 13px; }
+.workspace-gate__form select,
+.workspace-gate__form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #484848;
+  border-radius: 12px;
+  outline: none;
+  color: #f4f4f2;
+  background: #202020;
+  font: inherit;
+}
+
+.workspace-gate__form select:focus,
+.workspace-gate__form input:focus { border-color: #72dcc0; }
+.workspace-gate__form button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 12px;
+  color: #18372f;
+  background: #72dcc0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.workspace-gate__form button:disabled { opacity: 0.45; cursor: default; }
+.workspace-gate__divider { display: flex; align-items: center; gap: 12px; color: #777; font-size: 12px; }
+.workspace-gate__divider::before,
+.workspace-gate__divider::after { content: ""; height: 1px; flex: 1; background: #3d3d3d; }
+.workspace-gate__error { margin: 0; color: #ffaaa5; }
+.workspace-gate__loading { display: flex; align-items: center; gap: 10px; color: #aaa; }
+
+.workspace-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px 12px 14px;
+  padding: 10px 12px;
+  border: 1px solid #3e3e3e;
+  border-radius: 12px;
+  background: #292929;
+}
+
+.workspace-switcher div { min-width: 0; display: grid; gap: 2px; }
+.workspace-switcher span { color: #858585; font-size: 11px; }
+.workspace-switcher strong { overflow: hidden; color: #dededc; font-size: 13px; text-overflow: ellipsis; }
+.workspace-switcher button {
+  border: 0;
+  color: #aaa;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.workspace-switcher button:hover { color: #fff; }

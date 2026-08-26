@@ -18,6 +18,7 @@ from app.core.config import (
     RAG_TOP_K,
 )
 from app.model.document import Document, DocumentChunk
+from app.service.workspace import current_workspace_id
 from app.service.embedding import embed_texts
 
 
@@ -163,7 +164,12 @@ async def retrieve_sources(
     embedding_base_url: str | None = None,
 ) -> list[dict]:
     ready_document = await session.scalar(
-        select(Document.id).where(Document.index_status == "ready").limit(1)
+        select(Document.id)
+        .where(
+            Document.index_status == "ready",
+            Document.workspace_id == current_workspace_id(session),
+        )
+        .limit(1)
     )
     if ready_document is None:
         return []
@@ -174,7 +180,10 @@ async def retrieve_sources(
     statement = (
         select(DocumentChunk, Document, distance.label("distance"))
         .join(Document, Document.id == DocumentChunk.document_id)
-        .where(Document.index_status == "ready")
+        .where(
+            Document.index_status == "ready",
+            Document.workspace_id == current_workspace_id(session),
+        )
         .order_by(distance)
         .limit(max(1, RAG_TOP_K))
     )

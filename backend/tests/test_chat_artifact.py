@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from uuid import UUID
 
 from app.service.chat_artifact import (
     ChatArtifactNotFoundError,
@@ -25,7 +26,24 @@ class ChatArtifactTests(unittest.TestCase):
             self.assertEqual(stored.read_bytes(), b"docx-content")
             self.assertEqual(stored.name, "report.docx")
             self.assertIn("wordprocessingml.document", media_type)
-            self.assertEqual(result["download_url"], f"/api/artifacts/{result['artifact_id']}")
+            self.assertEqual(
+                result["download_url"],
+                f"/api/artifacts/{result['artifact_id']}?workspace_id=00000000-0000-0000-0000-0000000000c4",
+            )
+
+    def test_artifacts_are_isolated_by_workspace(self) -> None:
+        first = UUID("00000000-0000-0000-0000-000000000111")
+        second = UUID("00000000-0000-0000-0000-000000000222")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.docx"
+            source.write_bytes(b"private")
+            with patch("app.service.chat_artifact.CHAT_ARTIFACT_DIR", root / "artifacts"):
+                result = store_chat_artifact(source, "private.docx", first)
+                with self.assertRaises(ChatArtifactNotFoundError):
+                    get_chat_artifact(result["artifact_id"], second)
+                stored, _ = get_chat_artifact(result["artifact_id"], first)
+                self.assertEqual(stored.read_bytes(), b"private")
 
     def test_missing_artifact_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch(

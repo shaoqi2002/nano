@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db_session
+from app.service.workspace import get_workspace_session
 from app.schema.conversation import (
     ConversationMessagesResponse,
     ConversationResponse,
@@ -32,7 +32,7 @@ from app.repository.agent_run import get_run_ids_by_assistant_message_ids
 
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
-SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDependency = Annotated[AsyncSession, Depends(get_workspace_session)]
 logger = logging.getLogger(__name__)
 
 

@@ -1,7 +1,16 @@
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "/api";
+let activeWorkspaceId = "";
+
+export function setActiveWorkspaceId(workspaceId) {
+  activeWorkspaceId = workspaceId || "";
+}
+
+function workspaceHeaders() {
+  return activeWorkspaceId ? { "X-Workspace-ID": activeWorkspaceId } : {};
+}
 
 async function request(path, options = {}) {
-  const headers = { ...options.headers };
+  const headers = { ...workspaceHeaders(), ...options.headers };
   if (options.body && !(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
@@ -17,6 +26,17 @@ async function request(path, options = {}) {
 
   if (response.status === 204) return null;
   return response.json();
+}
+
+export function listWorkspaces() {
+  return request("/workspaces");
+}
+
+export function createWorkspace(name) {
+  return request("/workspaces", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
 }
 
 export function createConversation() {
@@ -121,6 +141,7 @@ export async function sendMessageStream(
   const headers = {
     "Content-Type": "application/json",
     "X-DeepSeek-API-Key": apiKey,
+    ...workspaceHeaders(),
   };
   if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
   Object.assign(headers, embeddingHeaders(embeddingApiKey, embeddingBaseUrl));
@@ -199,6 +220,7 @@ export async function runEvalStream(
   const headers = {
     "Content-Type": "application/json",
     "X-DeepSeek-API-Key": apiKey,
+    ...workspaceHeaders(),
   };
   if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
   const response = await fetch(`${API_BASE_URL}/evals/runs/stream`, {
@@ -220,7 +242,7 @@ export async function runEvalStream(
 }
 
 export async function resumeAgentRunStream(runId, apiKey, tavilyApiKey, onEvent, signal) {
-  const headers = { "X-DeepSeek-API-Key": apiKey };
+  const headers = { "X-DeepSeek-API-Key": apiKey, ...workspaceHeaders() };
   if (tavilyApiKey) headers["X-Tavily-API-Key"] = tavilyApiKey;
   const response = await fetch(`${API_BASE_URL}/agent-runs/${runId}/resume/stream`, {
     method: "POST",
@@ -266,12 +288,17 @@ export function reindexDocument(documentId, embeddingApiKey = "", embeddingBaseU
 }
 
 export function documentContentUrl(documentId, download = false) {
-  const suffix = download ? "?download=true" : "";
+  const query = new URLSearchParams();
+  if (download) query.set("download", "true");
+  if (activeWorkspaceId) query.set("workspace_id", activeWorkspaceId);
+  const suffix = query.size ? `?${query}` : "";
   return `${API_BASE_URL}/documents/${documentId}/content${suffix}`;
 }
 
 export async function getDocumentText(documentId) {
-  const response = await fetch(`${API_BASE_URL}/documents/${documentId}/text`);
+  const response = await fetch(`${API_BASE_URL}/documents/${documentId}/text`, {
+    headers: workspaceHeaders(),
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.detail || `请求失败（${response.status}）`);

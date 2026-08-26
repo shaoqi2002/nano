@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from "vue";
 
 import {
+  createWorkspace,
   createConversation,
   deleteConversation as deleteConversationRequest,
   getAgentRun,
@@ -11,8 +12,10 @@ import {
   getMessages,
   getTavilyUsage,
   listConversations,
+  listWorkspaces,
   resumeAgentRunStream,
   sendMessageStream,
+  setActiveWorkspaceId,
 } from "./api";
 import DocumentsView from "./DocumentsView.vue";
 import EvaluationsView from "./EvaluationsView.vue";
@@ -39,9 +42,16 @@ const RAG_STORAGE_KEY = "nano-rag-enabled";
 const AGENT_MODE_STORAGE_KEY = "nano-agent-mode";
 const ACTIVE_RUN_STORAGE_KEY = "nano-agent-active-run";
 
+const workspaces = ref([]);
+const activeWorkspace = ref(null);
+const workspaceSelection = ref("");
+const newWorkspaceName = ref("");
+const workspaceLoading = ref(true);
+const workspaceSubmitting = ref(false);
+const workspaceError = ref("");
 const conversations = ref([]);
 const activeView = ref("chat");
-const activeConversationId = ref(localStorage.getItem(ACTIVE_KEY));
+const activeConversationId = ref(null);
 const messages = ref([]);
 const draft = ref("");
 const isLoading = ref(false);
@@ -81,7 +91,7 @@ const useRag = ref(localStorage.getItem(RAG_STORAGE_KEY) !== "false");
 const agentMode = ref(localStorage.getItem(AGENT_MODE_STORAGE_KEY) || "auto");
 const documentTarget = ref({ id: null, page: null });
 const streamController = ref(null);
-const resumableRun = ref(JSON.parse(localStorage.getItem(ACTIVE_RUN_STORAGE_KEY) || "null"));
+const resumableRun = ref(null);
 const traceDialogOpen = ref(false);
 const traceLoading = ref(false);
 const traceRun = ref(null);
@@ -95,6 +105,11 @@ const canSend = computed(
   () => (draft.value.trim().length > 0 || pendingAttachments.value.length > 0)
     && !isSending.value && activeConversationId.value,
 );
+const hasCh4Features = computed(() => activeWorkspace.value?.slug === "ch4");
+
+function workspaceStorageKey(key) {
+  return `${key}:${activeWorkspace.value?.id || "none"}`;
+}
 
 async function addChatFiles(fileList) {
   const files = [...(fileList || [])];
@@ -147,7 +162,7 @@ const apiKeyStatusLabel = computed(() => {
 
 function rememberActiveConversation(id) {
   activeConversationId.value = id;
-  localStorage.setItem(ACTIVE_KEY, id);
+  localStorage.setItem(workspaceStorageKey(ACTIVE_KEY), id);
 }
 
 function openApiKeyDialog() {
@@ -444,7 +459,7 @@ async function removeConversation(id) {
     conversations.value = conversations.value.filter((item) => item.id !== id);
 
     if (activeConversationId.value === id) {
-      localStorage.removeItem(ACTIVE_KEY);
+      localStorage.removeItem(workspaceStorageKey(ACTIVE_KEY));
       activeConversationId.value = null;
       messages.value = [];
 
@@ -514,7 +529,10 @@ function handleStreamEvent(message, event) {
       conversationId: activeConversationId.value,
       mode: event.mode,
     };
-    localStorage.setItem(ACTIVE_RUN_STORAGE_KEY, JSON.stringify(resumableRun.value));
+    localStorage.setItem(
+      workspaceStorageKey(ACTIVE_RUN_STORAGE_KEY),
+      JSON.stringify(resumableRun.value),
+    );
   } else if (event.type === "message.delta") {
     message.content += event.delta || "";
   } else if (event.type === "message.reset") {
@@ -580,7 +598,7 @@ function handleStreamEvent(message, event) {
       status: "completed",
     });
     resumableRun.value = null;
-    localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+    localStorage.removeItem(workspaceStorageKey(ACTIVE_RUN_STORAGE_KEY));
   } else if (event.type === "message.failed") {
     throw new Error(event.message || "生成回答失败");
   }
@@ -771,7 +789,7 @@ async function openTrace(message) {
   }
 }
 
-onMounted(async () => {
+async function loadWorkspaceData() {
   isLoading.value = true;
   try {
     conversations.value = (await listConversations()).map((conversation) => ({
@@ -820,18 +838,146 @@ onMounted(async () => {
         }));
       } else {
         resumableRun.value = null;
-        localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+        localStorage.removeItem(workspaceStorageKey(ACTIVE_RUN_STORAGE_KEY));
       }
     } catch {
       resumableRun.value = null;
-      localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+      localStorage.removeItem(workspaceStorageKey(ACTIVE_RUN_STORAGE_KEY));
     }
+  }
+}
+
+async function enterWorkspace(workspace) {
+  if (!workspace) return;
+  activeWorkspace.value = workspace;
+  activeView.value = "chat";
+  setActiveWorkspaceId(workspace.id);
+  const scopedConversationKey = workspaceStorageKey(ACTIVE_KEY);
+  const legacyConversationId = workspace.slug === "ch4" ? localStorage.getItem(ACTIVE_KEY) : null;
+  activeConversationId.value = localStorage.getItem(scopedConversationKey) || legacyConversationId;
+  if (activeConversationId.value) {
+    localStorage.setItem(scopedConversationKey, activeConversationId.value);
+  }
+  const storedRun = localStorage.getItem(workspaceStorageKey(ACTIVE_RUN_STORAGE_KEY));
+  const legacyRun = workspace.slug === "ch4" ? localStorage.getItem(ACTIVE_RUN_STORAGE_KEY) : null;
+  try {
+    resumableRun.value = JSON.parse(storedRun || legacyRun || "null");
+  } catch {
+    resumableRun.value = null;
+  }
+  workspaceError.value = "";
+  await loadWorkspaceData();
+}
+
+async function enterSelectedWorkspace() {
+  const selected = workspaces.value.find((item) => item.id === workspaceSelection.value);
+  if (!selected) {
+    workspaceError.value = "请选择一个 workspace";
+    return;
+  }
+  workspaceSubmitting.value = true;
+  try {
+    await enterWorkspace(selected);
+  } finally {
+    workspaceSubmitting.value = false;
+  }
+}
+
+async function createAndEnterWorkspace() {
+  const name = newWorkspaceName.value.trim();
+  if (!name) {
+    workspaceError.value = "请输入新 workspace 名称";
+    return;
+  }
+  workspaceSubmitting.value = true;
+  workspaceError.value = "";
+  try {
+    const workspace = await createWorkspace(name);
+    workspaces.value.push(workspace);
+    workspaceSelection.value = workspace.id;
+    newWorkspaceName.value = "";
+    await enterWorkspace(workspace);
+  } catch (error) {
+    workspaceError.value = error.message;
+  } finally {
+    workspaceSubmitting.value = false;
+  }
+}
+
+function leaveWorkspace() {
+  streamController.value?.abort();
+  setActiveWorkspaceId("");
+  activeWorkspace.value = null;
+  activeConversationId.value = null;
+  conversations.value = [];
+  messages.value = [];
+  activeView.value = "chat";
+  sidebarOpen.value = false;
+  resumableRun.value = null;
+}
+
+onMounted(async () => {
+  workspaceLoading.value = true;
+  try {
+    workspaces.value = await listWorkspaces();
+    if (workspaces.value.length) {
+      workspaceSelection.value = workspaces.value[0].id;
+    }
+  } catch (error) {
+    workspaceError.value = error.message;
+  } finally {
+    workspaceLoading.value = false;
   }
 });
 </script>
 
 <template>
-  <div class="app-shell">
+  <main v-if="!activeWorkspace" class="workspace-gate">
+    <section class="workspace-gate__card">
+      <div class="workspace-gate__brand"><span>N</span> Nano</div>
+      <div>
+        <p class="workspace-gate__eyebrow">WORKSPACE</p>
+        <h1>进入你的工作区</h1>
+        <p>对话、文档和使用记录会按 workspace 完全隔离。</p>
+      </div>
+
+      <div v-if="workspaceLoading" class="workspace-gate__loading">
+        <span class="loader" /> 正在载入 workspace
+      </div>
+      <template v-else>
+        <form class="workspace-gate__form" @submit.prevent="enterSelectedWorkspace">
+          <label>
+            <span>选择 workspace</span>
+            <select v-model="workspaceSelection" :disabled="workspaceSubmitting">
+              <option value="" disabled>请选择</option>
+              <option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.id">
+                {{ workspace.name }}
+              </option>
+            </select>
+          </label>
+          <button type="submit" :disabled="workspaceSubmitting || !workspaceSelection">进入 Nano</button>
+        </form>
+
+        <div class="workspace-gate__divider"><span>或创建新的 workspace</span></div>
+
+        <form class="workspace-gate__form workspace-gate__create" @submit.prevent="createAndEnterWorkspace">
+          <label>
+            <span>Workspace 名称</span>
+            <input
+              v-model="newWorkspaceName"
+              maxlength="80"
+              placeholder="例如：personal"
+              :disabled="workspaceSubmitting"
+            />
+          </label>
+          <button type="submit" :disabled="workspaceSubmitting || !newWorkspaceName.trim()">创建并进入</button>
+        </form>
+      </template>
+      <p v-if="workspaceError" class="workspace-gate__error" role="alert">{{ workspaceError }}</p>
+    </section>
+  </main>
+
+  <div v-else class="app-shell">
     <div
       v-if="sidebarOpen"
       class="sidebar-backdrop"
@@ -848,6 +994,14 @@ onMounted(async () => {
         <button class="icon-button sidebar__close" aria-label="关闭侧栏" @click="sidebarOpen = false">
           ×
         </button>
+      </div>
+
+      <div class="workspace-switcher">
+        <div>
+          <span>当前 workspace</span>
+          <strong>{{ activeWorkspace.name }}</strong>
+        </div>
+        <button type="button" :disabled="isSending" @click="leaveWorkspace">退出</button>
       </div>
 
       <button
@@ -869,6 +1023,7 @@ onMounted(async () => {
       </button>
 
       <button
+        v-if="hasCh4Features"
         class="new-chat-button documents-button"
         :class="{ 'documents-button--active': activeView === 'evaluations' }"
         @click="openEvaluations"
@@ -878,6 +1033,7 @@ onMounted(async () => {
       </button>
 
       <button
+        v-if="hasCh4Features"
         class="new-chat-button documents-button"
         :class="{ 'documents-button--active': activeView === 'job-applications' }"
         @click="openJobApplications"

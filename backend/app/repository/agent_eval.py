@@ -9,24 +9,36 @@ from app.model.agent_eval import (
     AgentEvalResult,
     AgentEvalRun,
 )
+from app.service.workspace import current_workspace_id
 
 
 async def create_eval_case(session: AsyncSession, definition: dict) -> AgentEvalCase:
-    case = AgentEvalCase(definition=definition)
+    case = AgentEvalCase(
+        definition=definition, workspace_id=current_workspace_id(session)
+    )
     session.add(case)
     await session.flush()
     return case
 
 
 async def list_eval_cases(session: AsyncSession) -> list[AgentEvalCase]:
-    statement = select(AgentEvalCase).order_by(AgentEvalCase.created_at)
+    statement = (
+        select(AgentEvalCase)
+        .where(AgentEvalCase.workspace_id == current_workspace_id(session))
+        .order_by(AgentEvalCase.created_at)
+    )
     return list(await session.scalars(statement))
 
 
 async def get_eval_case(
     session: AsyncSession, case_id: UUID
 ) -> AgentEvalCase | None:
-    return await session.get(AgentEvalCase, case_id)
+    return await session.scalar(
+        select(AgentEvalCase).where(
+            AgentEvalCase.id == case_id,
+            AgentEvalCase.workspace_id == current_workspace_id(session),
+        )
+    )
 
 
 async def delete_eval_case(session: AsyncSession, case: AgentEvalCase) -> None:
@@ -54,6 +66,7 @@ async def create_eval_run(
     config: dict,
 ) -> AgentEvalRun:
     run = AgentEvalRun(
+        workspace_id=current_workspace_id(session),
         dataset_version=dataset_version,
         case_count=case_count,
         config=config,
@@ -94,12 +107,18 @@ async def add_eval_result(
 
 
 async def get_eval_run(session: AsyncSession, run_id: UUID) -> AgentEvalRun | None:
-    return await session.get(AgentEvalRun, run_id)
+    return await session.scalar(
+        select(AgentEvalRun).where(
+            AgentEvalRun.id == run_id,
+            AgentEvalRun.workspace_id == current_workspace_id(session),
+        )
+    )
 
 
 async def list_eval_runs(session: AsyncSession, limit: int = 20) -> list[AgentEvalRun]:
     statement = (
         select(AgentEvalRun)
+        .where(AgentEvalRun.workspace_id == current_workspace_id(session))
         .order_by(AgentEvalRun.created_at.desc())
         .limit(max(1, min(limit, 100)))
     )

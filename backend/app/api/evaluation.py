@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db_session
+from app.service.workspace import get_ch4_workspace_session
 from app.eval.dataset import EVAL_FORM_OPTIONS, EvalCase, load_golden_dataset
 from app.repository.agent_eval import (
     create_eval_case,
@@ -36,7 +36,7 @@ from app.service.evaluation import stream_eval_run
 
 
 router = APIRouter(prefix="/evals", tags=["evals"])
-SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDependency = Annotated[AsyncSession, Depends(get_ch4_workspace_session)]
 
 
 def _sse(event: dict) -> str:

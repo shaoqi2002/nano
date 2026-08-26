@@ -80,12 +80,12 @@ Nano 采用第二种。LangGraph 的 `StateGraph` 明确定义状态、节点和
 
 ```text
 ┌──────────────────────── Vue 3 前端 ────────────────────────┐
-│ 对话 / 文档库 / 评测页 / Agent Trace / API Key 配置       │
+│ Workspace 入口 / 对话 / 文档库 / 评测 / Trace / Key 配置  │
 │ fetch + ReadableStream 解析 SSE                            │
 └───────────────────────────┬────────────────────────────────┘
                             │ HTTP + SSE
 ┌──────────────────────── FastAPI API ───────────────────────┐
-│ conversations / agent-runs / documents / evals / account  │
+│ workspaces / conversations / agent-runs / documents / evals│
 └─────────────┬──────────────────────┬────────────────────────┘
               │                      │
 ┌─────────────▼───────────┐  ┌───────▼───────────────────────┐

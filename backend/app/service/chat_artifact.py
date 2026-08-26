@@ -6,6 +6,7 @@ from threading import Lock
 from uuid import UUID, uuid4
 
 from app.core.config import CHAT_ARTIFACT_DIR, CHAT_ARTIFACT_TTL_SECONDS
+from app.service.workspace import active_workspace_id
 
 
 class ChatArtifactNotFoundError(FileNotFoundError):
@@ -23,18 +24,32 @@ def cleanup_expired_chat_artifacts() -> None:
     ensure_chat_artifact_directory()
     cutoff = time.time() - max(CHAT_ARTIFACT_TTL_SECONDS, 60)
     with _lock:
-        for directory in CHAT_ARTIFACT_DIR.iterdir():
+        for workspace_directory in CHAT_ARTIFACT_DIR.iterdir():
             try:
-                if directory.is_dir() and directory.stat().st_mtime < cutoff:
-                    shutil.rmtree(directory)
+                if not workspace_directory.is_dir():
+                    continue
+                children = list(workspace_directory.iterdir())
+                # Remove legacy one-level artifacts created before workspace isolation.
+                if any(child.is_file() for child in children):
+                    if workspace_directory.stat().st_mtime < cutoff:
+                        shutil.rmtree(workspace_directory)
+                    continue
+                for directory in children:
+                    if directory.is_dir() and directory.stat().st_mtime < cutoff:
+                        shutil.rmtree(directory)
+                if not any(workspace_directory.iterdir()):
+                    workspace_directory.rmdir()
             except FileNotFoundError:
                 continue
 
 
-def store_chat_artifact(source: Path, filename: str) -> dict:
+def store_chat_artifact(
+    source: Path, filename: str, workspace_id: UUID | None = None
+) -> dict:
     cleanup_expired_chat_artifacts()
+    selected_workspace_id = workspace_id or active_workspace_id()
     artifact_id = uuid4()
-    directory = CHAT_ARTIFACT_DIR / str(artifact_id)
+    directory = CHAT_ARTIFACT_DIR / str(selected_workspace_id) / str(artifact_id)
     target = directory / Path(filename).name
     with _lock:
         directory.mkdir(parents=True, exist_ok=False)
@@ -45,13 +60,19 @@ def store_chat_artifact(source: Path, filename: str) -> dict:
         "filename": target.name,
         "media_type": media_type,
         "size_bytes": target.stat().st_size,
-        "download_url": f"/api/artifacts/{artifact_id}",
+        "download_url": (
+            f"/api/artifacts/{artifact_id}?workspace_id={selected_workspace_id}"
+        ),
         "expires_in_seconds": max(CHAT_ARTIFACT_TTL_SECONDS, 60),
     }
 
 
-def get_chat_artifact(artifact_id: UUID) -> tuple[Path, str]:
-    directory = CHAT_ARTIFACT_DIR / str(artifact_id)
+def get_chat_artifact(
+    artifact_id: UUID, workspace_id: UUID | None = None
+) -> tuple[Path, str]:
+    directory = (
+        CHAT_ARTIFACT_DIR / str(workspace_id or active_workspace_id()) / str(artifact_id)
+    )
     if not directory.is_dir():
         raise ChatArtifactNotFoundError
     files = [path for path in directory.iterdir() if path.is_file()]

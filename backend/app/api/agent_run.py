@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db_session
+from app.service.workspace import get_workspace_session
 from app.schema.conversation import AgentRunEventResponse, AgentRunResponse
 from app.repository.agent_run import list_agent_run_events
 from app.service.agent_run import (
@@ -20,7 +20,7 @@ from app.service.agent_run import (
 
 
 router = APIRouter(prefix="/agent-runs", tags=["agent-runs"])
-SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDependency = Annotated[AsyncSession, Depends(get_workspace_session)]
 
 
 def _sse(event: dict) -> str:

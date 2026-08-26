@@ -5,11 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.model.job_application import JobApplication
+from app.service.workspace import current_workspace_id
 
 
 async def list_job_applications(session: AsyncSession) -> list[JobApplication]:
     statement = (
         select(JobApplication)
+        .where(JobApplication.workspace_id == current_workspace_id(session))
         .options(selectinload(JobApplication.events))
         .order_by(JobApplication.updated_at.desc())
     )
@@ -23,5 +25,6 @@ async def get_job_application(
         select(JobApplication)
         .options(selectinload(JobApplication.events))
         .where(JobApplication.id == application_id)
+        .where(JobApplication.workspace_id == current_workspace_id(session))
     )
     return await session.scalar(statement)

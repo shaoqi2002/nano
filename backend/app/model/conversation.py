@@ -16,6 +16,12 @@ class Conversation(Base):
         primary_key=True,
         default=uuid4,
     )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE", name="fk_conversations_workspace_id"),
+        nullable=False,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

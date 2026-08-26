@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.model.agent_run import AgentRun, AgentRunEvent
+from app.model.conversation import Conversation
+from app.service.workspace import current_workspace_id
 
 
 async def create_agent_run(
@@ -27,13 +29,29 @@ async def create_agent_run(
 
 
 async def get_agent_run(session: AsyncSession, run_id: UUID) -> AgentRun | None:
-    return await session.get(AgentRun, run_id)
+    return await session.scalar(
+        select(AgentRun)
+        .join(Conversation, Conversation.id == AgentRun.conversation_id)
+        .where(
+            AgentRun.id == run_id,
+            Conversation.workspace_id == current_workspace_id(session),
+        )
+    )
 
 
 async def get_agent_run_for_update(
     session: AsyncSession, run_id: UUID
 ) -> AgentRun | None:
-    return await session.get(AgentRun, run_id, with_for_update=True)
+    statement = (
+        select(AgentRun)
+        .join(Conversation, Conversation.id == AgentRun.conversation_id)
+        .where(
+            AgentRun.id == run_id,
+            Conversation.workspace_id == current_workspace_id(session),
+        )
+        .with_for_update()
+    )
+    return await session.scalar(statement)
 
 
 def utcnow() -> datetime:
@@ -80,7 +98,12 @@ async def get_run_ids_by_assistant_message_ids(
     if not message_ids:
         return {}
     statement = select(AgentRun.assistant_message_id, AgentRun.id).where(
-        AgentRun.assistant_message_id.in_(message_ids)
+        AgentRun.assistant_message_id.in_(message_ids),
+        AgentRun.conversation_id.in_(
+            select(Conversation.id).where(
+                Conversation.workspace_id == current_workspace_id(session)
+            )
+        ),
     )
     rows = (await session.execute(statement)).all()
     return {

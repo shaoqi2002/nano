@@ -14,6 +14,12 @@ class AgentEvalRun(Base):
     id: Mapped[UUID] = mapped_column(
         PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
     )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE", name="fk_agent_eval_runs_workspace_id"),
+        nullable=False,
+        index=True,
+    )
     dataset_version: Mapped[str] = mapped_column(String(80), nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", server_default="pending"
@@ -62,6 +68,12 @@ class AgentEvalCase(Base):
 
     id: Mapped[UUID] = mapped_column(
         PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE", name="fk_agent_eval_cases_workspace_id"),
+        nullable=False,
+        index=True,
     )
     definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

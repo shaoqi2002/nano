@@ -18,6 +18,12 @@ class JobApplication(Base):
     id: Mapped[UUID] = mapped_column(
         PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
     )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE", name="fk_job_applications_workspace_id"),
+        nullable=False,
+        index=True,
+    )
     company: Mapped[str] = mapped_column(String(120), nullable=False)
     role: Mapped[str] = mapped_column(String(160), nullable=False)
     location: Mapped[str] = mapped_column(String(100), nullable=False, default="")

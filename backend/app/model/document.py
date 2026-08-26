@@ -18,6 +18,12 @@ class Document(Base):
         primary_key=True,
         default=uuid4,
     )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE", name="fk_documents_workspace_id"),
+        nullable=False,
+        index=True,
+    )
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     object_key: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
     content_type: Mapped[str] = mapped_column(String(127), nullable=False)
