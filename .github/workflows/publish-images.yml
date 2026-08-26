@@ -60,8 +60,8 @@ jobs:
 
       - name: Verify backend and frontend through nginx
         run: |
-          curl --fail --show-error --retry 10 --retry-delay 2 http://127.0.0.1:8088/api/health
-          curl --fail --show-error --retry 10 --retry-delay 2 http://127.0.0.1:8088/
+          curl --fail --show-error --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8088/api/health
+          curl --fail --show-error --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8088/
           docker compose -f compose.prod.yaml exec -T backend soffice --headless --version
           docker compose -f compose.prod.yaml exec -T backend pdfinfo -v
 
