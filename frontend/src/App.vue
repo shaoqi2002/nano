@@ -523,6 +523,8 @@ function toolLabel(name) {
     word_create_document: "生成 Word",
     word_edit_document: "编辑 Word",
     word_convert_to_pdf: "转换 PDF",
+    presentation_create: "生成 PPT",
+    presentation_edit_attachment: "编辑 PPT",
   }[name] || name;
 }
 
@@ -1570,7 +1572,7 @@ onMounted(async () => {
                   :download="artifact.filename"
                 >
                   <span class="message-artifact-download__icon">
-                    {{ artifact.kind === "pdf" ? "PDF" : "DOCX" }}
+                    {{ artifact.kind === "pdf" ? "PDF" : artifact.kind === "presentation" ? "PPTX" : "DOCX" }}
                   </span>
                   <span class="message-artifact-download__body">
                     <strong>{{ artifact.filename }}</strong>

@@ -1,10 +1,14 @@
 import base64
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from docx import Document as WordDocument
+from pptx import Presentation
 from langchain_core.messages import HumanMessage
 from pypdf import PdfWriter
 from pydantic import ValidationError
@@ -113,6 +117,30 @@ class ChatDocumentAttachmentTests(unittest.IsolatedAsyncioTestCase):
         }
         with self.assertRaises(InvalidDocumentError):
             await prepare_chat_attachments([attachment])
+
+    async def test_extracts_and_registers_pptx_as_chat_local_source(self) -> None:
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+        slide.shapes.title.text = "产品路线图"
+        slide.placeholders[1].text = "第一阶段"
+        stream = BytesIO()
+        presentation.save(stream)
+        attachment = ChatAttachment(
+            kind="document",
+            name="roadmap.pptx",
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            data=base64.b64encode(stream.getvalue()).decode(),
+        )
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "app.service.chat_artifact.CHAT_ARTIFACT_DIR", Path(directory)
+        ):
+            prepared = await prepare_chat_attachments([attachment.model_dump()])
+
+        self.assertIn("产品路线图", prepared[0]["content"])
+        self.assertTrue(prepared[0]["source_artifact_id"])
+        blocks = human_message_content("修改标题", prepared)
+        self.assertIn("source_artifact_id", blocks[1]["text"])
 
 
 if __name__ == "__main__":

@@ -4,12 +4,20 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import UUID
 
+from pptx import Presentation
+
 from app.service.chat_artifact import (
     ChatArtifactNotFoundError,
     get_chat_artifact,
     store_chat_artifact,
+    store_chat_artifact_bytes,
 )
-from app.tools.local_write import word_create_document, word_edit_document
+from app.tools.local_write import (
+    presentation_create,
+    presentation_edit_attachment,
+    word_create_document,
+    word_edit_document,
+)
 
 
 class ChatArtifactTests(unittest.TestCase):
@@ -74,6 +82,40 @@ class ChatArtifactToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(output["filename"], "report.docx")
         self.assertTrue(output["download_url"].startswith("/api/artifacts/"))
         self.assertNotIn("document_id", output)
+
+    async def test_presentation_create_and_chat_attachment_edit_return_downloads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "app.service.chat_artifact.CHAT_ARTIFACT_DIR", Path(directory)
+        ):
+            created = await presentation_create.ainvoke({
+                "filename": "briefing.pptx",
+                "title": "旧标题",
+                "slides": [{
+                    "type": "content",
+                    "title": "计划",
+                    "blocks": [{"type": "paragraph", "text": "第一版"}],
+                }],
+            })
+            created_output = created["outputs"][0]
+            source_path, _ = get_chat_artifact(created_output["artifact_id"])
+            source = store_chat_artifact_bytes(source_path.read_bytes(), "uploaded.pptx")
+            edited = await presentation_edit_attachment.ainvoke({
+                "artifact_id": source["artifact_id"],
+                "output_filename": "briefing-v2.pptx",
+                "operations": [{"type": "replace_text", "old": "旧标题", "new": "新标题"}],
+            })
+            edited_path, _ = get_chat_artifact(edited["outputs"][0]["artifact_id"])
+            edited_deck = Presentation(edited_path)
+            edited_text = "\n".join(
+                shape.text for slide in edited_deck.slides
+                for shape in slide.shapes if getattr(shape, "has_text_frame", False)
+            )
+
+        self.assertEqual(created_output["kind"], "presentation")
+        self.assertEqual(edited["outputs"][0]["kind"], "presentation")
+        self.assertEqual(edited["edit_summary"]["replacements"], 1)
+        self.assertEqual(edited_deck.core_properties.title, "旧标题")
+        self.assertIn("新标题", edited_text)
 
 
 if __name__ == "__main__":

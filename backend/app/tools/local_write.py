@@ -12,7 +12,8 @@ from app.service.document import (
     cached_document_path,
     require_document,
 )
-from app.service.chat_artifact import store_chat_artifact
+from app.service.chat_artifact import get_chat_artifact, store_chat_artifact
+from app.service.presentation_artifact import create_presentation, edit_presentation
 from app.service.word_artifact import (
     convert_word_to_pdf,
     create_word_document,
@@ -126,6 +127,46 @@ async def word_convert_to_pdf(document_id: str, output_filename: str) -> dict:
     }
 
 
+@tool
+async def presentation_create(
+    filename: str,
+    title: str,
+    slides: list[dict[str, Any]],
+    subtitle: str = "",
+) -> dict:
+    """生成可直接下载的 16:9 PPTX。slides 支持 content(blocks)、section、two_column(left/right) 和 table(headers/rows)；content blocks 支持 heading、paragraph、bullets、numbered、quote。"""
+    name = safe_artifact_filename(filename, ".pptx")
+    with tempfile.TemporaryDirectory(prefix="nano-ppt-") as directory:
+        path = Path(directory) / name
+        await run_in_threadpool(create_presentation, path, title, subtitle, slides)
+        output = await run_in_threadpool(store_chat_artifact, path, name)
+        output["kind"] = "presentation"
+        return {"outputs": [output]}
+
+
+@tool
+async def presentation_edit_attachment(
+    artifact_id: str,
+    output_filename: str,
+    operations: list[dict[str, Any]],
+) -> dict:
+    """编辑聊天中上传的 PPTX 并返回新版本。artifact_id 来自附件上下文；operations 支持 replace_text(old,new)、delete_slide(slide_number) 和 append_slides(slides)，不会覆盖原文件。"""
+    source, _ = await run_in_threadpool(get_chat_artifact, UUID(artifact_id))
+    if source.suffix.lower() != ".pptx":
+        raise ValueError("只能编辑聊天中上传的 PPTX 文件。")
+    name = safe_artifact_filename(output_filename, ".pptx")
+    with tempfile.TemporaryDirectory(prefix="nano-ppt-edit-") as directory:
+        output_path = Path(directory) / name
+        summary = await run_in_threadpool(edit_presentation, source, output_path, operations)
+        output = await run_in_threadpool(store_chat_artifact, output_path, name)
+        output["kind"] = "presentation"
+        return {
+            "outputs": [output],
+            "edit_summary": summary,
+            "source_artifact_id": artifact_id,
+        }
+
+
 def create_local_write_tools():
     return [
         local_write_text,
@@ -133,4 +174,6 @@ def create_local_write_tools():
         word_create_document,
         word_edit_document,
         word_convert_to_pdf,
+        presentation_create,
+        presentation_edit_attachment,
     ]
