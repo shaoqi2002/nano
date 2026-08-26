@@ -134,7 +134,7 @@ async def presentation_create(
     slides: list[dict[str, Any]],
     subtitle: str = "",
 ) -> dict:
-    """生成可直接下载的 16:9 PPTX。slides 支持 content(blocks)、section、two_column(left/right) 和 table(headers/rows)；content blocks 支持 heading、paragraph、bullets、numbered、quote。"""
+    """生成可直接下载的 16:9 PPTX。每页至少提供 title/heading 和 content/body/bullets/blocks 之一；例如 {"title":"摘要","bullets":["要点一","要点二"]}。复杂布局支持 content(blocks)、section、two_column(left/right) 和 table(headers/rows)，blocks 支持 heading、paragraph、bullets、numbered、quote。"""
     name = safe_artifact_filename(filename, ".pptx")
     with tempfile.TemporaryDirectory(prefix="nano-ppt-") as directory:
         path = Path(directory) / name

@@ -74,6 +74,37 @@ class PresentationArtifactTests(unittest.TestCase):
             self.assertIn("新内容", presentation_text(output.read_bytes()))
             self.assertEqual(len(Presentation(output).slides), 3)
 
+    def test_accepts_simplified_agent_slide_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "simple.pptx"
+            create_presentation(
+                output,
+                "简化输入",
+                "",
+                [
+                    {"heading": "摘要", "content": "这段内容不使用 blocks 字段。"},
+                    {"title": "重点", "bullets": ["第一点", "第二点"]},
+                    {
+                        "layout": "title_and_content",
+                        "title": "结论",
+                        "body": ["结论一", "结论二"],
+                    },
+                ],
+            )
+
+            extracted = presentation_text(output.read_bytes())
+            self.assertEqual(len(Presentation(output).slides), 4)
+            self.assertIn("这段内容不使用 blocks 字段", extracted)
+            self.assertIn("第一点", extracted)
+            self.assertIn("结论一", extracted)
+
+    def test_rejects_completely_empty_slide(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(Exception, "缺少标题和内容"):
+                create_presentation(
+                    Path(directory) / "empty.pptx", "标题", "", [{}]
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

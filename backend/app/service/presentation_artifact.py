@@ -190,7 +190,94 @@ def _add_table_slide(slide, spec: dict[str, Any], number: int) -> None:
                     _set_run_font(run, 15, bold=headers and row_index == 0, color=WHITE if headers and row_index == 0 else DARK)
 
 
+def _first_value(spec: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = spec.get(key)
+        if value not in (None, "", []):
+            return value
+    return None
+
+
+def _normalize_blocks(value: Any) -> list[dict[str, Any]]:
+    if value in (None, "", []):
+        return []
+    if isinstance(value, str):
+        return [{"type": "paragraph", "text": value}]
+    if isinstance(value, dict):
+        if value.get("type"):
+            return [dict(value)]
+        nested = _first_value(value, "blocks", "content", "body", "text")
+        return _normalize_blocks(nested)
+    if isinstance(value, list):
+        if all(isinstance(item, dict) and item.get("type") for item in value):
+            return [dict(item) for item in value]
+        return [{"type": "bullets", "items": value}]
+    return [{"type": "paragraph", "text": str(value)}]
+
+
+def _normalize_slide_spec(raw: dict[str, Any]) -> dict[str, Any]:
+    spec = dict(raw)
+    requested_kind = str(_first_value(spec, "type", "layout", "kind") or "content").lower()
+    kind_aliases = {
+        "title": "section",
+        "title_slide": "section",
+        "title-only": "section",
+        "title_only": "section",
+        "title_and_content": "content",
+        "title-and-content": "content",
+        "bullet": "content",
+        "bullets": "content",
+        "text": "content",
+        "two-column": "two_column",
+        "two columns": "two_column",
+        "comparison": "two_column",
+    }
+    kind = kind_aliases.get(requested_kind, requested_kind)
+    if "headers" in spec or "rows" in spec:
+        kind = "table"
+    elif "left" in spec or "right" in spec:
+        kind = "two_column"
+    spec["type"] = kind
+    spec["title"] = str(_first_value(spec, "title", "heading", "name") or "")
+    spec["subtitle"] = str(_first_value(spec, "subtitle", "description") or "")
+
+    if kind == "content":
+        blocks = _normalize_blocks(spec.get("blocks"))
+        if not blocks:
+            blocks = _normalize_blocks(_first_value(spec, "content", "body", "text"))
+        bullets = _first_value(spec, "bullets", "points", "items")
+        if bullets not in (None, "", []):
+            blocks.extend([{"type": "bullets", "items": list(bullets) if isinstance(bullets, list) else [bullets]}])
+        if not blocks and spec["subtitle"]:
+            blocks = [{"type": "paragraph", "text": spec["subtitle"]}]
+        spec["blocks"] = blocks
+        if not spec["title"] and not blocks:
+            raise PresentationArtifactError("正文幻灯片缺少标题和内容")
+    elif kind == "section":
+        if not spec["title"] and not spec["subtitle"]:
+            raise PresentationArtifactError("分节幻灯片缺少标题")
+    elif kind == "two_column":
+        for side in ("left", "right"):
+            column = dict(spec.get(side) or {})
+            column["heading"] = str(_first_value(column, "heading", "title", "name") or "")
+            column_items = _first_value(column, "items", "bullets", "points")
+            if column_items is not None:
+                column["items"] = column_items if isinstance(column_items, list) else [column_items]
+            else:
+                column["text"] = str(_first_value(column, "text", "content", "body") or "")
+            spec[side] = column
+        if not spec["title"] and not any(
+            spec[side].get("heading") or spec[side].get("text") or spec[side].get("items")
+            for side in ("left", "right")
+        ):
+            raise PresentationArtifactError("双栏幻灯片缺少内容")
+    elif kind != "table":
+        raise PresentationArtifactError(f"不支持的幻灯片类型：{requested_kind}")
+    return spec
+
+
 def _append_slide(presentation: Presentation, spec: dict[str, Any], number: int) -> None:
+    spec = _normalize_slide_spec(spec)
     kind = str(spec.get("type") or "content")
     slide = presentation.slides.add_slide(presentation.slide_layouts[6])
     background = slide.background.fill
@@ -229,8 +316,6 @@ def _append_slide(presentation: Presentation, spec: dict[str, Any], number: int)
                     for run in paragraph.runs:
                         _set_run_font(run, 18)
         return
-    if kind != "content":
-        raise PresentationArtifactError(f"不支持的幻灯片类型：{kind}")
     top = 1.55
     for block in list(spec.get("blocks") or []):
         top += _add_content_block(slide, dict(block), 0.8, top, 11.75)
