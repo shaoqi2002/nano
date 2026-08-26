@@ -103,6 +103,17 @@ class RagSourceResponse(BaseModel):
     similarity: float
 
 
+class ChatArtifactResponse(BaseModel):
+    artifact_id: UUID
+    filename: str
+    media_type: str
+    size_bytes: int
+    download_url: str
+    expires_in_seconds: int
+    kind: Literal["word", "pdf"]
+    page_count: int | None = None
+
+
 class MessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -110,6 +121,7 @@ class MessageResponse(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     attachments: list[ChatAttachment] = Field(default_factory=list)
+    artifacts: list[ChatArtifactResponse] = Field(default_factory=list)
     sources: list[RagSourceResponse] = Field(default_factory=list)
     options: dict = Field(default_factory=dict)
     created_at: datetime

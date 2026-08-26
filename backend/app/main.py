@@ -10,12 +10,14 @@ from app.api import api_router
 from app.core.config import LANGGRAPH_DATABASE_URL, LANGGRAPH_POOL_SIZE
 from app.core.database import close_database, create_tables
 from app.service.document_indexer import DocumentIndexRequests, indexing_worker
+from app.service.chat_artifact import cleanup_expired_chat_artifacts
 from app.tools.local_read import ensure_workspace_directory
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_workspace_directory()
+    cleanup_expired_chat_artifacts()
     await create_tables()
     checkpointer_pool = AsyncConnectionPool(
         conninfo=LANGGRAPH_DATABASE_URL,

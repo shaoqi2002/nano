@@ -337,6 +337,8 @@ Web Search 只返回受长度限制的摘要；需要核对细节时再用 Web E
 
 本地文件工具把所有路径解析到 `AGENT_WORKSPACE_DIR` 下，拒绝绝对路径和路径穿越。Word 创建、另存编辑版本和 PDF 转换只生成新产物，在用户直接提出文档操作时自动允许。文本覆盖和文件移动仍需 API 调用方显式设置 `allow_write_tools`；网页、RAG 和附件中的指令不得触发写操作。
 
+聊天生成的 DOCX/PDF 保存到独立的 `CHAT_ARTIFACT_DIR`，通过不可预测 UUID 下载地址提供给浏览器，默认 24 小时后清理，不写入文档库或触发索引。Word 创建与编辑默认只输出 DOCX，只有用户明确要求 PDF 时才额外转换。
+
 ### 8.3 风险模型仍可继续完善
 
 当前支持 `read/write/high` 风险以及高风险 call ID 审批，但 UI/API 还没有完整的人在回路审批恢复流程。也就是说，框架层已经表达 `ToolApprovalRequired`，产品层尚未形成“暂停—展示参数—用户确认—从 checkpoint 恢复”的完整闭环。这是很好的后续扩展方向。

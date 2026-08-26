@@ -47,6 +47,8 @@ services:
       DOCUMENT_CACHE_DIR: /data/document-cache
       DOCUMENT_CACHE_MAX_BYTES: ${DOCUMENT_CACHE_MAX_BYTES:-5368709120}
       AGENT_WORKSPACE_DIR: /data/agent-workspace
+      CHAT_ARTIFACT_DIR: /data/chat-artifacts
+      CHAT_ARTIFACT_TTL_SECONDS: ${CHAT_ARTIFACT_TTL_SECONDS:-86400}
       LOCAL_READ_MAX_CHARS: ${LOCAL_READ_MAX_CHARS:-50000}
       LOCAL_SEARCH_MAX_RESULTS: ${LOCAL_SEARCH_MAX_RESULTS:-100}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
@@ -65,6 +67,7 @@ services:
     volumes:
       - ${DOCUMENT_CACHE_PATH:-./document_cache}:/data/document-cache
       - ${AGENT_WORKSPACE_PATH:-./agent_workspace}:/data/agent-workspace
+      - ${CHAT_ARTIFACT_PATH:-./chat_artifacts}:/data/chat-artifacts
     depends_on:
       postgres:
         condition: service_healthy

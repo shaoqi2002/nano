@@ -49,6 +49,9 @@ class Message(Base):
     attachments: Mapped[list[dict]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    artifacts: Mapped[list[dict]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

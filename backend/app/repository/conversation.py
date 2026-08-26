@@ -97,6 +97,7 @@ async def add_message(
     sources: list[dict] | None = None,
     options: dict | None = None,
     attachments: list[dict] | None = None,
+    artifacts: list[dict] | None = None,
 ) -> Message:
     message = Message(
         conversation_id=conversation_id,
@@ -105,6 +106,7 @@ async def add_message(
         sources=sources or [],
         options=options or {},
         attachments=attachments or [],
+        artifacts=artifacts or [],
     )
     session.add(message)
     await session.flush()

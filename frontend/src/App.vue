@@ -474,7 +474,24 @@ function toolLabel(name) {
     web_search: "搜索网页",
     web_extract: "读取网页",
     deep_research: "深度研究",
+    word_create_document: "生成 Word",
+    word_edit_document: "编辑 Word",
+    word_convert_to_pdf: "转换 PDF",
   }[name] || name;
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatArtifactExpiry(seconds) {
+  const hours = Math.max(1, Math.round(Number(seconds || 86400) / 3600));
+  if (hours < 24) return `${hours} 小时内可下载`;
+  const days = Math.max(1, Math.round(hours / 24));
+  return `${days} 天内可下载`;
 }
 
 function agentLabel(agent) {
@@ -549,6 +566,14 @@ function handleStreamEvent(message, event) {
       step.resultCount = event.result_count;
       step.message = event.message;
     }
+    if (event.type === "tool.completed" && event.artifacts?.length) {
+      message.artifacts ||= [];
+      for (const artifact of event.artifacts) {
+        if (!message.artifacts.some((item) => item.artifact_id === artifact.artifact_id)) {
+          message.artifacts.push(artifact);
+        }
+      }
+    }
   } else if (event.type === "message.completed") {
     Object.assign(message, event.message, {
       steps: message.steps,
@@ -597,6 +622,7 @@ async function submitMessage() {
     role: "assistant",
     content: "",
     sources: [],
+    artifacts: [],
     steps: [],
     plan: null,
     runId: null,
@@ -1263,6 +1289,26 @@ onMounted(async () => {
                 <span>当前 Key</span>
                 <strong>{{ Math.max(0, tavilyUsage.key.limit - tavilyUsage.key.usage) }} credits 剩余</strong>
                 <small>{{ tavilyUsage.key.usage }} / {{ tavilyUsage.key.limit }} 已用</small>
+              </div>
+              <div v-if="message.role === 'assistant' && message.artifacts?.length" class="message-artifacts">
+                <a
+                  v-for="artifact in message.artifacts"
+                  :key="artifact.artifact_id"
+                  class="message-artifact-download"
+                  :href="artifact.download_url"
+                  :download="artifact.filename"
+                >
+                  <span class="message-artifact-download__icon">
+                    {{ artifact.kind === "pdf" ? "PDF" : "DOCX" }}
+                  </span>
+                  <span class="message-artifact-download__body">
+                    <strong>{{ artifact.filename }}</strong>
+                    <small>{{ formatFileSize(artifact.size_bytes) }} · {{ formatArtifactExpiry(artifact.expires_in_seconds) }}</small>
+                  </span>
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 13h10" />
+                  </svg>
+                </a>
               </div>
               <div class="usage-track">
                 <span :style="{ width: `${usagePercent(tavilyUsage.key.usage, tavilyUsage.key.limit)}%` }" />

@@ -1062,6 +1062,75 @@ button {
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
+.message-artifacts {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.message-artifact-download {
+  display: grid;
+  width: min(420px, 100%);
+  grid-template-columns: 42px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #464646;
+  border-radius: 12px;
+  background: #292929;
+  color: #ddd;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.message-artifact-download:hover {
+  border-color: #607a74;
+  background: #2d3432;
+}
+
+.message-artifact-download__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid #40544f;
+  border-radius: 9px;
+  background: #26332f;
+  color: #a9d8cd;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.message-artifact-download__body {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.message-artifact-download__body strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-artifact-download__body small {
+  color: #888;
+  font-size: 10px;
+}
+
+.message-artifact-download > svg {
+  width: 18px;
+  height: 18px;
+  justify-self: center;
+  fill: none;
+  stroke: #aaa;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
 .composer-box--dragging {
   border-color: #82c9b9;
   background: #2d3936;

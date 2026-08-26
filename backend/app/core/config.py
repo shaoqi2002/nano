@@ -62,6 +62,8 @@ DOCUMENT_CACHE_MAX_BYTES = int(
 AGENT_WORKSPACE_DIR = Path(
     os.getenv("AGENT_WORKSPACE_DIR", "/data/agent-workspace")
 )
+CHAT_ARTIFACT_DIR = Path(os.getenv("CHAT_ARTIFACT_DIR", "/data/chat-artifacts"))
+CHAT_ARTIFACT_TTL_SECONDS = int(os.getenv("CHAT_ARTIFACT_TTL_SECONDS", "86400"))
 LOCAL_READ_MAX_CHARS = int(os.getenv("LOCAL_READ_MAX_CHARS", "50000"))
 LOCAL_SEARCH_MAX_RESULTS = int(os.getenv("LOCAL_SEARCH_MAX_RESULTS", "100"))
 EMBEDDING_BASE_URL = os.getenv(

@@ -101,6 +101,7 @@ def initial_agent_state(
         "status": "running",
         "fault_injection": fault_injection,
         "write_tools_allowed": write_tools_allowed,
+        "artifacts": [],
     }
 
 
@@ -146,6 +147,11 @@ async def _run_tool(
                 "risk_level": execution.risk_level,
                 "attempts": execution.attempts,
             }
+            if isinstance(execution.value, dict):
+                metadata["artifacts"] = [
+                    item for item in execution.value.get("outputs", [])
+                    if isinstance(item, dict) and item.get("download_url")
+                ]
         except Exception as error:
             content = f"工具执行失败：{error}"
             failed = True
@@ -235,8 +241,10 @@ def _build_chat_graph(model: Any, tools: ToolRegistry | list[BaseTool]) -> State
             )))
         results = await asyncio.gather(*(job[3] for job in jobs))
         messages: list[ToolMessage] = []
+        artifacts: list[dict[str, Any]] = []
         for (call, _allowed, started, _job), (message, failed, metadata) in zip(jobs, results):
             messages.append(message)
+            artifacts.extend(metadata.get("artifacts") or [])
             event = {
                 "type": "tool.failed" if failed else "tool.completed",
                 "call_id": str(call.get("id") or "unknown"),
@@ -249,7 +257,7 @@ def _build_chat_graph(model: Any, tools: ToolRegistry | list[BaseTool]) -> State
             else:
                 event["urls"] = extract_urls(message.content)
             writer(event)
-        return {"messages": messages, "tool_call_count": total}
+        return {"messages": messages, "tool_call_count": total, "artifacts": artifacts}
 
     async def force_answer(state: AgentState) -> AgentState:
         writer = get_stream_writer()

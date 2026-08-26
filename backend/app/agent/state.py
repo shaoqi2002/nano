@@ -49,3 +49,4 @@ class AgentState(TypedDict, total=False):
     error: str | None
     fault_injection: Literal["none", "researcher_once", "researcher_always"]
     write_tools_allowed: bool
+    artifacts: Annotated[list[dict[str, Any]], operator.add]

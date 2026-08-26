@@ -41,7 +41,7 @@ Supervisor（拆解任务并选择 specialist）
 - 浏览器端 DeepSeek、Tavily 与百炼 Embedding Key 配置及服务状态检查
 - 通用 Tool Registry，统一管理工具版本、权限、风险、超时、重试与审计元数据
 - 受限本地工作区读写、系统状态查询，以及安全文档产物自动写入
-- 结构化生成/版本化编辑 Word，LibreOffice 转换 PDF，并自动保存到文档库
+- 结构化生成/版本化编辑 Word，LibreOffice 转换 PDF，并提供临时浏览器下载
 - Eval 历史运行 baseline 对比，支持总分与逐用例回归差值
 - FastAPI + SQLAlchemy + PostgreSQL/pgvector 后端，Vue 3 前端
 - CI 测试门禁、完整 Compose 冒烟测试、SBOM 和 Git SHA 不可变镜像
@@ -84,5 +84,6 @@ Supervisor 分派、Agent 重试/完成、工具调用、审核结果与完整�
 会自动允许，并始终创建新产物；文本覆盖和文件移动仍需要 API 请求显式授权。
 
 Word 工具支持标题、正文、多级标题、项目符号、编号列表、引用、表格和分页。编辑操作始终
-生成新的 DOCX 版本，不覆盖来源文档。新 DOCX 与 PDF 都通过对象存储进入文档库，随后沿用
-现有索引流程。PDF 转换依赖后端镜像内的 LibreOffice，并使用 Poppler 做部署环境中的页面渲染检查。
+生成新的 DOCX 版本，不覆盖来源文档。聊天生成物不进入文档库，而是提供默认 24 小时有效的
+浏览器下载链接；默认只生成 DOCX，只有用户明确要求时才同时生成 PDF。PDF 转换依赖后端镜像
+内的 LibreOffice，并使用 Poppler 做部署环境中的页面渲染检查。

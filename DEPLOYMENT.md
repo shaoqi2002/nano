@@ -93,10 +93,12 @@ mount dedicated to Agent-managed files rather than pointing it at `/`, a home
 directory, or Docker's data directory.
 
 The backend image includes LibreOffice Writer, Poppler, and Noto CJK fonts.
-Generated or edited DOCX files are stored as new document-library objects;
-source documents are never overwritten. PDF conversion reopens the output and
-requires at least one valid page before it is uploaded. The UI's per-request
-write toggle is off by default and is enforced again by the backend policy.
+Generated chat artifacts are written to `CHAT_ARTIFACT_PATH`, exposed through
+unguessable download URLs, and removed after `CHAT_ARTIFACT_TTL_SECONDS` (24
+hours by default). They are not added to the document library. DOCX is the
+default output; PDF is generated only when explicitly requested. Source
+documents are never overwritten, and PDF conversion reopens the output and
+requires at least one valid page before download.
 
 The current Nano application has no user account or document authorization
 layer. Keep port 8088 behind the LAN, Tailscale, or another authenticated

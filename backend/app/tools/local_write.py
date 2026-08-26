@@ -10,9 +10,9 @@ from starlette.concurrency import run_in_threadpool
 from app.core.database import SessionLocal
 from app.service.document import (
     cached_document_path,
-    create_document_from_path,
     require_document,
 )
+from app.service.chat_artifact import store_chat_artifact
 from app.service.word_artifact import (
     convert_word_to_pdf,
     create_word_document,
@@ -57,19 +57,14 @@ async def _store_outputs(
     if create_pdf:
         pdf_path = docx_path.with_suffix(".pdf")
         page_count = await run_in_threadpool(convert_word_to_pdf, docx_path, pdf_path)
-    async with SessionLocal() as session:
-        word = await create_document_from_path(session, docx_path, filename)
-    outputs = [{"document_id": str(word.id), "filename": word.original_name, "kind": "word"}]
+    word = await run_in_threadpool(store_chat_artifact, docx_path, filename)
+    word["kind"] = "word"
+    outputs = [word]
     if pdf_path is not None:
-        async with SessionLocal() as session:
-            pdf = await create_document_from_path(session, pdf_path, pdf_path.name)
-        outputs.append({
-            "document_id": str(pdf.id),
-            "filename": pdf.original_name,
-            "kind": "pdf",
-            "page_count": page_count,
-        })
-    return {"outputs": outputs, "index_status": "pending"}
+        pdf = await run_in_threadpool(store_chat_artifact, pdf_path, pdf_path.name)
+        pdf.update({"kind": "pdf", "page_count": page_count})
+        outputs.append(pdf)
+    return {"outputs": outputs}
 
 
 @tool
@@ -78,9 +73,9 @@ async def word_create_document(
     title: str,
     blocks: list[dict[str, Any]],
     subtitle: str = "",
-    create_pdf: bool = True,
+    create_pdf: bool = False,
 ) -> dict:
-    """生成专业 Word 并入库。blocks 支持 heading(level,text)、paragraph(text)、quote(text)、bullets(items)、numbered(items)、table(headers,rows,column_widths) 和 page_break；可同时生成 PDF。"""
+    """生成可直接下载的 Word。默认只生成 DOCX；仅当用户明确要求 PDF 时设置 create_pdf=true。blocks 支持 heading(level,text)、paragraph(text)、quote(text)、bullets(items)、numbered(items)、table(headers,rows,column_widths) 和 page_break。"""
     name = safe_artifact_filename(filename, ".docx")
     with tempfile.TemporaryDirectory(prefix="nano-word-") as directory:
         path = Path(directory) / name
@@ -93,9 +88,9 @@ async def word_edit_document(
     document_id: str,
     output_filename: str,
     operations: list[dict[str, Any]],
-    create_pdf: bool = True,
+    create_pdf: bool = False,
 ) -> dict:
-    """编辑库中 Word 并另存新版本。operations 支持 replace_text(old,new)、delete_paragraph(contains)、append_blocks(blocks)；可同时生成 PDF且不覆盖原件。"""
+    """编辑文档库中的 Word 并返回可直接下载的新版本。默认只生成 DOCX；仅当用户明确要求 PDF 时设置 create_pdf=true。operations 支持 replace_text(old,new)、delete_paragraph(contains)、append_blocks(blocks)，且不覆盖原件。"""
     async with SessionLocal() as session:
         document = await require_document(session, UUID(document_id))
         if document.preview_kind != "word":
@@ -113,7 +108,7 @@ async def word_edit_document(
 
 @tool
 async def word_convert_to_pdf(document_id: str, output_filename: str) -> dict:
-    """将文档库中的 DOCX 转换为 PDF，并把生成的 PDF 保存回文档库。"""
+    """将文档库中的 DOCX 转换为可直接下载的 PDF，不保存回文档库。"""
     async with SessionLocal() as session:
         document = await require_document(session, UUID(document_id))
         if document.preview_kind != "word":
@@ -123,15 +118,11 @@ async def word_convert_to_pdf(document_id: str, output_filename: str) -> dict:
     with tempfile.TemporaryDirectory(prefix="nano-pdf-") as directory:
         output = Path(directory) / name
         pages = await run_in_threadpool(convert_word_to_pdf, source, output)
-        async with SessionLocal() as session:
-            pdf = await create_document_from_path(session, output, name)
+        pdf = await run_in_threadpool(store_chat_artifact, output, name)
+        pdf.update({"kind": "pdf", "page_count": pages})
     return {
-        "outputs": [{
-            "document_id": str(pdf.id), "filename": pdf.original_name,
-            "kind": "pdf", "page_count": pages,
-        }],
+        "outputs": [pdf],
         "source_document_id": document_id,
-        "index_status": "pending",
     }
 
 

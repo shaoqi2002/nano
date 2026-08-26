@@ -309,6 +309,7 @@ async def stream_resume_run(
                     "role": assistant.role,
                     "content": assistant.content,
                     "sources": assistant.sources,
+                    "artifacts": assistant.artifacts,
                     "created_at": assistant.created_at.isoformat(),
                     "run_id": str(run.id),
                 },
@@ -414,6 +415,7 @@ async def _stream_graph(
         values = snapshot.values or {}
         answer = str(values.get("final_answer") or "").strip()
         effective_sources = list(values.get("rag_sources") or sources)
+        artifacts = list(values.get("artifacts") or [])
         if not answer:
             raise RuntimeError("Agent 未生成可显示的回答")
         async with session.begin():
@@ -427,6 +429,7 @@ async def _stream_graph(
                     "assistant",
                     answer,
                     public_sources(effective_sources),
+                    artifacts=artifacts,
                 )
                 current.assistant_message_id = assistant.id
             else:
@@ -457,6 +460,7 @@ async def _stream_graph(
                     "role": assistant.role,
                     "content": assistant.content,
                     "sources": assistant.sources,
+                    "artifacts": assistant.artifacts,
                     "created_at": assistant.created_at.isoformat(),
                     "run_id": str(run.id),
                 },
