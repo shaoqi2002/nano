@@ -59,7 +59,9 @@ DeepSeek 和 Tavily API Key 由前端请求头传入，不会写入 Agent trace�
 
 首次启动会创建 `ch4` workspace，并把升级前已有的对话、文档、Agent Run、Eval 和求职投递
 记录迁移到其中。进入 Nano 前必须选择或创建 workspace；退出后可重新选择。普通 workspace
-只显示聊天和文档库，Agent Eval 与求职投递仅在 `ch4` 中显示，并由后端同步限制访问。
+只显示聊天和文档库，Agent Eval 与求职投递仅在 `ch4` 中显示，并由后端同步限制访问。入口页
+只列出当前浏览器成功进入过的 workspace；也可以输入准确名称进入已有 workspace。普通 workspace
+可从侧栏永久删除，`ch4` 作为系统迁移 workspace 不允许删除。
 
 聊天附件每条最多 8 个：单个文本文件上限 200 KB，单张图片上限 5 MB，PDF/DOCX 单个上限
 10 MB，总上限 15 MB。文本、PDF 和 DOCX 会在本次聊天请求中直接解析为用户上下文，不创建

@@ -28,8 +28,10 @@ async function request(path, options = {}) {
   return response.json();
 }
 
-export function listWorkspaces() {
-  return request("/workspaces");
+export function listWorkspaces(ids = []) {
+  const query = new URLSearchParams();
+  for (const id of ids) query.append("ids", id);
+  return request(`/workspaces${query.size ? `?${query}` : ""}`);
 }
 
 export function createWorkspace(name) {
@@ -37,6 +39,17 @@ export function createWorkspace(name) {
     method: "POST",
     body: JSON.stringify({ name }),
   });
+}
+
+export function resolveWorkspace(name) {
+  return request("/workspaces/resolve", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteWorkspace(workspaceId) {
+  return request(`/workspaces/${workspaceId}`, { method: "DELETE" });
 }
 
 export function createConversation() {

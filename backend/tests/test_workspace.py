@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -10,6 +11,7 @@ from app.service.workspace import (
     CH4_WORKSPACE_ID,
     current_workspace_id,
     require_ch4_workspace,
+    get_workspace_session,
 )
 
 
@@ -21,6 +23,33 @@ class WorkspaceSession:
 
 
 class WorkspaceIsolationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_workspace_lookup_finishes_implicit_transaction(self) -> None:
+        workspace = SimpleNamespace(id=CH4_WORKSPACE_ID, slug="ch4")
+
+        class ScopedSession:
+            def __init__(self):
+                self.info = {}
+                self.get = AsyncMock(return_value=workspace)
+                self.rollback = AsyncMock()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+            def in_transaction(self):
+                return True
+
+        scoped_session = ScopedSession()
+        with patch("app.service.workspace.SessionLocal", return_value=scoped_session):
+            dependency = get_workspace_session(str(CH4_WORKSPACE_ID), None)
+            yielded = await anext(dependency)
+            self.assertIs(yielded, scoped_session)
+            self.assertEqual(yielded.info["workspace_id"], CH4_WORKSPACE_ID)
+            scoped_session.rollback.assert_awaited_once()
+            await dependency.aclose()
+
     async def test_conversation_queries_are_workspace_scoped(self) -> None:
         session = WorkspaceSession(CH4_WORKSPACE_ID)
         await list_conversations(session)

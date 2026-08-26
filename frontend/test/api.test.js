@@ -17,6 +17,9 @@ import {
   restorePresetEvalCases,
   setActiveWorkspaceId,
   listConversations,
+  listWorkspaces,
+  resolveWorkspace,
+  deleteWorkspace,
   updateEvalCase,
   uploadDocument,
   updateJobApplicationStatus,
@@ -50,6 +53,35 @@ test("scopes requests and document links to the active workspace", async () => {
       documentContentUrl("doc-1", true),
       "/api/documents/doc-1/content?download=true&workspace_id=00000000-0000-0000-0000-0000000000c4",
     );
+  } finally {
+    setActiveWorkspaceId("");
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("lists only browser-known workspaces and resolves existing names", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      status: options.method === "DELETE" ? 204 : 200,
+      json: async () => ({ id: "workspace-1", name: "personal" }),
+    };
+  };
+
+  try {
+    await listWorkspaces(["workspace-1", "workspace-2"]);
+    await resolveWorkspace("personal");
+    setActiveWorkspaceId("workspace-1");
+    await deleteWorkspace("workspace-1");
+    assert.deepEqual(requests.map((item) => [item.url, item.options.method]), [
+      ["/api/workspaces?ids=workspace-1&ids=workspace-2", undefined],
+      ["/api/workspaces/resolve", "POST"],
+      ["/api/workspaces/workspace-1", "DELETE"],
+    ]);
+    assert.equal(requests[2].options.headers["X-Workspace-ID"], "workspace-1");
   } finally {
     setActiveWorkspaceId("");
     globalThis.fetch = originalFetch;

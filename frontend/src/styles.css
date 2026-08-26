@@ -1891,7 +1891,7 @@ button {
   background: #292929;
 }
 
-.workspace-switcher div { min-width: 0; display: grid; gap: 2px; }
+.workspace-switcher > div:first-child { min-width: 0; display: grid; gap: 2px; }
 .workspace-switcher span { color: #858585; font-size: 11px; }
 .workspace-switcher strong { overflow: hidden; color: #dededc; font-size: 13px; text-overflow: ellipsis; }
 .workspace-switcher button {
@@ -1903,3 +1903,7 @@ button {
   cursor: pointer;
 }
 .workspace-switcher button:hover { color: #fff; }
+.workspace-switcher button:disabled { opacity: 0.4; cursor: default; }
+.workspace-switcher__actions { display: flex; align-items: center; gap: 4px; }
+.workspace-switcher .workspace-switcher__delete { color: #d98b86; }
+.workspace-switcher .workspace-switcher__delete:hover:not(:disabled) { color: #ffaaa5; }

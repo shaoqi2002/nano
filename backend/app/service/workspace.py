@@ -47,9 +47,15 @@ async def get_workspace_session(
         workspace = await session.get(Workspace, selected_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
-        session.info["workspace_id"] = workspace.id
-        session.info["workspace_slug"] = workspace.slug
-        token = _active_workspace_id.set(workspace.id)
+        selected_workspace_id = workspace.id
+        selected_workspace_slug = workspace.slug
+        # session.get() starts an implicit read transaction. Scoped write
+        # services open their own transaction, so finish this lookup first.
+        if session.in_transaction():
+            await session.rollback()
+        session.info["workspace_id"] = selected_workspace_id
+        session.info["workspace_slug"] = selected_workspace_slug
+        token = _active_workspace_id.set(selected_workspace_id)
         try:
             yield session
         finally:
@@ -73,9 +79,28 @@ def require_ch4_workspace(session: AsyncSession) -> None:
         )
 
 
-async def list_workspaces(session: AsyncSession) -> list[Workspace]:
-    result = await session.scalars(select(Workspace).order_by(Workspace.created_at, Workspace.name))
+async def list_workspaces(
+    session: AsyncSession, workspace_ids: list[UUID]
+) -> list[Workspace]:
+    if not workspace_ids:
+        return []
+    result = await session.scalars(
+        select(Workspace)
+        .where(Workspace.id.in_(workspace_ids))
+        .order_by(Workspace.created_at, Workspace.name)
+    )
     return list(result)
+
+
+async def find_workspace_by_name(
+    session: AsyncSession, name: str
+) -> Workspace | None:
+    clean_name = " ".join(name.split())
+    if not clean_name:
+        return None
+    return await session.scalar(
+        select(Workspace).where(func.lower(Workspace.name) == clean_name.lower())
+    )
 
 
 async def create_workspace(session: AsyncSession, name: str) -> Workspace:

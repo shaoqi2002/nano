@@ -4,6 +4,7 @@ import { computed, nextTick, onMounted, reactive, ref } from "vue";
 import {
   createWorkspace,
   createConversation,
+  deleteWorkspace,
   deleteConversation as deleteConversationRequest,
   getAgentRun,
   getAgentRunEvents,
@@ -13,6 +14,7 @@ import {
   getTavilyUsage,
   listConversations,
   listWorkspaces,
+  resolveWorkspace,
   resumeAgentRunStream,
   sendMessageStream,
   setActiveWorkspaceId,
@@ -41,13 +43,16 @@ const DEFAULT_EMBEDDING_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mo
 const RAG_STORAGE_KEY = "nano-rag-enabled";
 const AGENT_MODE_STORAGE_KEY = "nano-agent-mode";
 const ACTIVE_RUN_STORAGE_KEY = "nano-agent-active-run";
+const KNOWN_WORKSPACES_STORAGE_KEY = "nano-known-workspaces";
 
 const workspaces = ref([]);
 const activeWorkspace = ref(null);
 const workspaceSelection = ref("");
 const newWorkspaceName = ref("");
+const existingWorkspaceName = ref("");
 const workspaceLoading = ref(true);
 const workspaceSubmitting = ref(false);
+const workspaceDeleting = ref(false);
 const workspaceError = ref("");
 const conversations = ref([]);
 const activeView = ref("chat");
@@ -109,6 +114,25 @@ const hasCh4Features = computed(() => activeWorkspace.value?.slug === "ch4");
 
 function workspaceStorageKey(key) {
   return `${key}:${activeWorkspace.value?.id || "none"}`;
+}
+
+function knownWorkspaceIds() {
+  try {
+    const value = JSON.parse(localStorage.getItem(KNOWN_WORKSPACES_STORAGE_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberWorkspace(workspaceId) {
+  const ids = [...new Set([...knownWorkspaceIds(), workspaceId])];
+  localStorage.setItem(KNOWN_WORKSPACES_STORAGE_KEY, JSON.stringify(ids));
+}
+
+function forgetWorkspace(workspaceId) {
+  const ids = knownWorkspaceIds().filter((id) => id !== workspaceId);
+  localStorage.setItem(KNOWN_WORKSPACES_STORAGE_KEY, JSON.stringify(ids));
 }
 
 async function addChatFiles(fileList) {
@@ -849,9 +873,11 @@ async function loadWorkspaceData() {
 
 async function enterWorkspace(workspace) {
   if (!workspace) return;
+  errorMessage.value = "";
   activeWorkspace.value = workspace;
   activeView.value = "chat";
   setActiveWorkspaceId(workspace.id);
+  rememberWorkspace(workspace.id);
   const scopedConversationKey = workspaceStorageKey(ACTIVE_KEY);
   const legacyConversationId = workspace.slug === "ch4" ? localStorage.getItem(ACTIVE_KEY) : null;
   activeConversationId.value = localStorage.getItem(scopedConversationKey) || legacyConversationId;
@@ -867,6 +893,29 @@ async function enterWorkspace(workspace) {
   }
   workspaceError.value = "";
   await loadWorkspaceData();
+}
+
+async function enterExistingWorkspace() {
+  const name = existingWorkspaceName.value.trim();
+  if (!name) {
+    workspaceError.value = "请输入 workspace 名称";
+    return;
+  }
+  workspaceSubmitting.value = true;
+  workspaceError.value = "";
+  try {
+    const workspace = await resolveWorkspace(name);
+    if (!workspaces.value.some((item) => item.id === workspace.id)) {
+      workspaces.value.push(workspace);
+    }
+    workspaceSelection.value = workspace.id;
+    existingWorkspaceName.value = "";
+    await enterWorkspace(workspace);
+  } catch (error) {
+    workspaceError.value = error.message;
+  } finally {
+    workspaceSubmitting.value = false;
+  }
 }
 
 async function enterSelectedWorkspace() {
@@ -916,10 +965,38 @@ function leaveWorkspace() {
   resumableRun.value = null;
 }
 
+async function removeActiveWorkspace() {
+  const workspace = activeWorkspace.value;
+  if (!workspace || workspace.slug === "ch4") return;
+  if (!window.confirm(`永久删除 workspace“${workspace.name}”及其中全部对话和文档？此操作无法撤销。`)) {
+    return;
+  }
+  workspaceDeleting.value = true;
+  errorMessage.value = "";
+  try {
+    await deleteWorkspace(workspace.id);
+    localStorage.removeItem(workspaceStorageKey(ACTIVE_KEY));
+    localStorage.removeItem(workspaceStorageKey(ACTIVE_RUN_STORAGE_KEY));
+    forgetWorkspace(workspace.id);
+    workspaces.value = workspaces.value.filter((item) => item.id !== workspace.id);
+    workspaceSelection.value = workspaces.value[0]?.id || "";
+    leaveWorkspace();
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    workspaceDeleting.value = false;
+  }
+}
+
 onMounted(async () => {
   workspaceLoading.value = true;
   try {
-    workspaces.value = await listWorkspaces();
+    const knownIds = knownWorkspaceIds();
+    workspaces.value = await listWorkspaces(knownIds);
+    localStorage.setItem(
+      KNOWN_WORKSPACES_STORAGE_KEY,
+      JSON.stringify(workspaces.value.map((workspace) => workspace.id)),
+    );
     if (workspaces.value.length) {
       workspaceSelection.value = workspaces.value[0].id;
     }
@@ -945,7 +1022,7 @@ onMounted(async () => {
         <span class="loader" /> 正在载入 workspace
       </div>
       <template v-else>
-        <form class="workspace-gate__form" @submit.prevent="enterSelectedWorkspace">
+        <form v-if="workspaces.length" class="workspace-gate__form" @submit.prevent="enterSelectedWorkspace">
           <label>
             <span>选择 workspace</span>
             <select v-model="workspaceSelection" :disabled="workspaceSubmitting">
@@ -956,6 +1033,21 @@ onMounted(async () => {
             </select>
           </label>
           <button type="submit" :disabled="workspaceSubmitting || !workspaceSelection">进入 Nano</button>
+        </form>
+
+        <div v-if="workspaces.length" class="workspace-gate__divider"><span>或</span></div>
+
+        <form class="workspace-gate__form" @submit.prevent="enterExistingWorkspace">
+          <label>
+            <span>进入已有 workspace</span>
+            <input
+              v-model="existingWorkspaceName"
+              maxlength="80"
+              placeholder="输入准确的 workspace 名称"
+              :disabled="workspaceSubmitting"
+            />
+          </label>
+          <button type="submit" :disabled="workspaceSubmitting || !existingWorkspaceName.trim()">进入已有 workspace</button>
         </form>
 
         <div class="workspace-gate__divider"><span>或创建新的 workspace</span></div>
@@ -1001,7 +1093,16 @@ onMounted(async () => {
           <span>当前 workspace</span>
           <strong>{{ activeWorkspace.name }}</strong>
         </div>
-        <button type="button" :disabled="isSending" @click="leaveWorkspace">退出</button>
+        <div class="workspace-switcher__actions">
+          <button
+            type="button"
+            class="workspace-switcher__delete"
+            :disabled="isSending || workspaceDeleting || activeWorkspace.slug === 'ch4'"
+            :title="activeWorkspace.slug === 'ch4' ? 'ch4 是系统 workspace，不能删除' : '永久删除当前 workspace'"
+            @click="removeActiveWorkspace"
+          >删除工作区</button>
+          <button type="button" :disabled="isSending || workspaceDeleting" @click="leaveWorkspace">退出</button>
+        </div>
       </div>
 
       <button

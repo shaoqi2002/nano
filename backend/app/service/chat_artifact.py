@@ -83,3 +83,9 @@ def get_chat_artifact(
         shutil.rmtree(directory, ignore_errors=True)
         raise ChatArtifactNotFoundError
     return path, mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def delete_workspace_artifacts(workspace_id: UUID) -> None:
+    directory = CHAT_ARTIFACT_DIR / str(workspace_id)
+    with _lock:
+        shutil.rmtree(directory, ignore_errors=True)

@@ -8,6 +8,10 @@ class WorkspaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
 
 
+class WorkspaceLookup(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
 class WorkspaceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
